@@ -12,7 +12,7 @@ export default {
     theme: {
         extend: {
             fontFamily: {
-                sans: ['Figtree', ...defaultTheme.fontFamily.sans],
+                sans: ['Figtree', 'Nirmala UI', 'Noto Sans Bengali', 'Kalpurush', ...defaultTheme.fontFamily.sans],
             },
         },
     },
