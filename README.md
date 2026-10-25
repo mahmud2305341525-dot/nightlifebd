@@ -36,9 +36,26 @@ User report → AnalyzeReportJob → Gemini (JSON) ─┐ if no key / quota hit
             → moderation queue sorted by AI severity → moderator verifies/rejects → reporter trust updated
             → safety score recalculated → badges · heatmap · safe route · night planner
 ```
-Score formula: `base = 40 + 20·CCTV + 20·guard + 4·lighting` (+10 day, −5 night, −10 late) and
-`score = clamp(base − 5·Σ severity × reporter_trust × e^(−age/30 days) × time_weight × duplicate_boost)`.
-Badge: ≥70 safe, ≥45 moderate, else caution. Reporter trust = (verified+1)/(verified+rejected+2).
+
+### Safety score formula — visual breakdown
+```
+ Venue checklist
+ ┌─────────────────────────────────────────────────────────────┐
+ │  base = 40 + 20·CCTV + 20·guard + 4·lighting  (max = 100) │
+ └─────────────────────────────────────────────────────────────┘
+          +  bucket_adjust  →  day +10 / evening 0 / night −5 / late −10
+
+ Community reports (verified, per time bucket)
+ ┌────────────────────────────────────────────────────────────────────────────────────┐
+ │  risk = Σ [ severity × reporter_trust × e^(−age/30d) × time_weight × dupe_boost ] │
+ │  where: time_weight = 1.0 (same bucket) or 0.3 (different bucket)                  │
+ │         dupe_boost  = 1 + 0.25 × min(3, corroborating_reports)                     │
+ │         reporter_trust = (verified+1) / (verified+rejected+2)   (Laplace smoothed) │
+ └────────────────────────────────────────────────────────────────────────────────────┘
+
+ final = clamp(base + bucket_adjust − 5 × risk,  0,  100)
+ badge:  ≥70 → safe   ·   ≥45 → moderate   ·   <45 → caution
+```
 
 ---
 
@@ -72,11 +89,12 @@ Optional: `php artisan havens:import` downloads **real** police stations / hospi
 | admin@test.com | super_admin (also manages users) |
 
 ### Optional free keys (`.env`) — the app works without all of them
-| Key | Gives you | Without it |
+| Key | Breaks? | Fallback behaviour |
 |---|---|---|
-| `GEMINI_API_KEY` ([aistudio.google.com/apikey](https://aistudio.google.com/apikey)) | LLM report analysis, embeddings, planner, venue coach | built-in Bangla/Banglish keyword analyzer + local similarity + rule-based planner/tips |
-| `ORS_API_KEY` ([openrouteservice.org](https://openrouteservice.org)) | OpenRouteService alternatives | public OSRM demo server |
-| `TELEGRAM_BOT_TOKEN` (@BotFather) | Telegram alerts to contacts who gave their chat ID | email alerts only (`MAIL_MAILER=log` writes them to `storage/logs/laravel.log`) |
+| `GEMINI_API_KEY` ([aistudio.google.com/apikey](https://aistudio.google.com/apikey)) | ❌ No | Built-in Bangla/Banglish keyword analyzer + local hashed-n-gram similarity + rule-based planner/tips |
+| `ORS_API_KEY` ([openrouteservice.org](https://openrouteservice.org)) | ❌ No | Public OSRM demo server (prototype-grade, may be slow) |
+| `TELEGRAM_BOT_TOKEN` (@BotFather) | ❌ No | Email alerts only (`MAIL_MAILER=log` writes to `storage/logs/laravel.log`) |
+| `APP_URL` (tunnel via cloudflared/ngrok) | ⚠️ Partial | Live trip links work on the same LAN only; contacts off-network cannot open them |
 
 Model names and free-tier limits change — verify them in Google AI Studio before the demo. Set `NIGHTLIFE_USE_QUEUE=true` and run `php artisan queue:work` if you prefer a real queue.
 
@@ -86,6 +104,9 @@ Geolocation, the service worker and "Add to Home Screen" need **HTTPS** (or loca
 ---
 
 ## 3. 5-minute demo script
+
+> **Before repeating the demo**: run `php artisan demo:reset` to clear trips, timers, dark spots and reset trust scores without re-seeding. Use `--yes` to skip the confirmation prompt.
+
 1. **Explore** (`/venues`) — switch the time selector from *Evening* to *Late night*: badges change. Open a venue → "Why this score?" per time bucket.
 2. Log in as `user@test.com` → **Report** in Bangla: `রাত ১১টায় ধানমন্ডি ২৭ এর কাছে আলো নেই, ছিনতাইয়ের চেষ্টা হয়েছে` → *My reports* shows the AI category/severity.
 3. Log in as `safety@test.com` → **Moderate reports**: queue sorted by severity with AI summary, spam %, duplicates. Verify → the venue score and reporter trust update.
@@ -114,11 +135,14 @@ database/seeders/      Roles/accounts · Venues · SafeHavens · DemoReports
 ```
 
 ## 6. Honest limitations
-* Bangladesh has no open crime dataset: risk comes from **community-verified reports + OpenStreetMap help points**. Sparse data = weaker scores (the explanation says so).
-* Browsers cannot send SMS silently: SOS opens a **pre-filled SMS** per contact; email/Telegram are sent automatically. No SMS gateway, payments, native apps or 99.99 % uptime target.
-* Live trip sharing only works while the owner's browser tab stays open. Locations are deleted 72 h after a trip ends.
-* Free AI quotas are limited; the offline analyzer is a fallback and less accurate than Gemini (reports it analysed are flagged for review).
-* Public OSRM demo server is for prototypes only; use an ORS key for steadier results. Routing profile is driving (CNG / car / ride-share).
+* **No open crime dataset**: Risk comes from **community-verified reports + OpenStreetMap help points**. Sparse data = weaker scores — the explainability text says so explicitly.
+* **Browsers cannot send SMS silently**: SOS opens a **pre-filled SMS** per contact; email/Telegram are sent automatically. No SMS gateway, payments, native apps or 99.99 % uptime target.
+* **Live trip sharing**: Only works while the owner's browser tab stays open. Locations are deleted 72 h after a trip ends.
+* **Free AI quota fragility**: Gemini free-tier quotas can run out mid-demo. The offline `LocalAnalyzer` is the fallback — it is less accurate (reports flagged for review), but the app continues to function.
+* **OSRM public server**: For prototypes only; use an ORS key for steadier routing. Routing profile is driving (CNG / car / ride-share).
+* **Lexicon bias in `LocalAnalyzer`**: The Bangla/Banglish keyword lexicon was hand-crafted. It will produce false positives/negatives for regional dialects, slang, and new vocabulary not in the list.
+* **Reporter trust feedback loop**: A malicious actor who submits many reports that moderators verify gains a high trust score. Their subsequent negative reports then carry more weight in the safety score formula. Mitigated by moderator oversight and the Laplace-smoothed trust formula, but acknowledged as a limitation.
+* **Cold start**: The safety score formula is correct but has limited signal without community data. At real launch every venue would initially show a checklist-only score.
 * Seed data is fictional. Do not publish incident claims about real businesses without evidence and moderation.
 * Test passwords in the seeder are for local development only.
 
