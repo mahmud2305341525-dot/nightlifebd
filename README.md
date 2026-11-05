@@ -61,7 +61,7 @@ User report → AnalyzeReportJob → Gemini (JSON) ─┐ if no key / quota hit
 
 ## 2. Run it (Windows + XAMPP, ~10 minutes)
 
-Requirements: PHP ≥ 8.2 (with `pdo_mysql`, `mbstring`, `curl`, `intl`, `zip`), Composer, Node 18+, MySQL (XAMPP).
+Requirements: PHP ≥ 8.2 (with `pdo_mysql`, `mbstring`, `curl`, `intl`, `zip`, `exif`, `fileinfo`; `gd` optional for report thumbnails), Composer, Node 18+, MySQL (XAMPP).
 
 ```bash
 composer install
@@ -98,6 +98,17 @@ Optional: `php artisan havens:import` downloads **real** police stations / hospi
 
 Model names and free-tier limits change — verify them in Google AI Studio before the demo. Set `NIGHTLIFE_USE_QUEUE=true` and run `php artisan queue:work` if you prefer a real queue.
 
+### Report photo storage and privacy
+Report evidence is stored on Laravel's private `local` disk (`storage/app/private/reports`), **not** under `public/`. `php artisan storage:link` is not needed for report photos. Images are served through the authorization-checked `reports.photos.show` route:
+
+- **Verified** report photos are public because they appear on public venue pages.
+- **Pending** and **rejected** report photos are visible only to the reporter and to staff.
+- Photos for **age-restricted venues** follow the venue age gate: public visitors must confirm they are 18+ before the photo route serves them; the reporter and staff keep access for moderation.
+
+Uploads are re-checked server-side for real image content, MIME type, size (5 MB) and dimensions (8000 × 8000 max). EXIF/XMP/IPTC metadata and PNG/WebP text/EXIF chunks are removed with pure PHP, and the sanitized file is re-parsed and verified before it is stored. If metadata removal cannot be verified, the upload is rejected. GD is optional: when it is installed a genuine 400 px thumbnail is generated; when it is absent the sanitized original is used as the thumbnail path, so no duplicate full-size "thumbnail" is kept.
+
+If you are upgrading an installation that already has files under `storage/app/public/reports`, move them to `storage/app/private/reports` before relying on the new route. Photos uploaded before this change were **not** sanitized; review or re-upload them if they may contain GPS metadata.
+
 ### Testing on a phone
 Geolocation, the service worker and "Add to Home Screen" need **HTTPS** (or localhost). Expose your laptop with `cloudflared tunnel --url http://127.0.0.1:8000` or `ngrok http 8000`; set `APP_URL` to the tunnel URL so live-trip links work for your contacts.
 
@@ -121,7 +132,7 @@ Geolocation, the service worker and "Add to Home Screen" need **HTTPS** (or loca
 ```bash
 php artisan test
 ```
-Covers auth/roles, contact limit & phone validation, venue approval flow and age gate, report validation (500 chars), offline AI classification (Bangla, Banglish, English), duplicate detection, score time-awareness & explanation, moderation → trust update, safe-route scoring (sampling, incidents, dark spots, havens, 30% rule), routing-API failure fallback, night-planner budget/caution rules, trip link expiry (410), timers (dead-man switch), SOS audit log and nearest help points. Tests use in-memory SQLite and never call external APIs.
+Covers auth/roles, contact limit & phone validation, venue approval flow and age gate, report validation (500 chars), offline AI classification (Bangla, Banglish, English), duplicate detection, score time-awareness & explanation, moderation → trust update, safe-route scoring (sampling, incidents, dark spots, havens, 30% rule), routing-API failure fallback, night-planner budget/caution rules, trip link expiry (410), timers (dead-man switch), SOS audit log and nearest help points, plus report-photo upload validation, EXIF/metadata stripping, private delivery authorization, thumbnails and file cleanup. Tests use in-memory SQLite, a fake `local` disk and never call external APIs.
 
 ## 5. Project structure
 ```
