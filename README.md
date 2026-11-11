@@ -36,15 +36,32 @@ User report → AnalyzeReportJob → Gemini (JSON) ─┐ if no key / quota hit
             → moderation queue sorted by AI severity → moderator verifies/rejects → reporter trust updated
             → safety score recalculated → badges · heatmap · safe route · night planner
 ```
-Score formula: `base = 40 + 20·CCTV + 20·guard + 4·lighting` (+10 day, −5 night, −10 late) and
-`score = clamp(base − 5·Σ severity × reporter_trust × e^(−age/30 days) × time_weight × duplicate_boost)`.
-Badge: ≥70 safe, ≥45 moderate, else caution. Reporter trust = (verified+1)/(verified+rejected+2).
+
+### Safety score formula — visual breakdown
+```
+ Venue checklist
+ ┌─────────────────────────────────────────────────────────────┐
+ │  base = 40 + 20·CCTV + 20·guard + 4·lighting  (max = 100) │
+ └─────────────────────────────────────────────────────────────┘
+          +  bucket_adjust  →  day +10 / evening 0 / night −5 / late −10
+
+ Community reports (verified, per time bucket)
+ ┌────────────────────────────────────────────────────────────────────────────────────┐
+ │  risk = Σ [ severity × reporter_trust × e^(−age/30d) × time_weight × dupe_boost ] │
+ │  where: time_weight = 1.0 (same bucket) or 0.3 (different bucket)                  │
+ │         dupe_boost  = 1 + 0.25 × min(3, corroborating_reports)                     │
+ │         reporter_trust = (verified+1) / (verified+rejected+2)   (Laplace smoothed) │
+ └────────────────────────────────────────────────────────────────────────────────────┘
+
+ final = clamp(base + bucket_adjust − 5 × risk,  0,  100)
+ badge:  ≥70 → safe   ·   ≥45 → moderate   ·   <45 → caution
+```
 
 ---
 
 ## 2. Run it (Windows + XAMPP, ~10 minutes)
 
-Requirements: PHP ≥ 8.2 (with `pdo_mysql`, `mbstring`, `curl`, `intl`, `zip`), Composer, Node 18+, MySQL (XAMPP).
+Requirements: PHP ≥ 8.2 (with `pdo_mysql`, `mbstring`, `curl`, `intl`, `zip`, `exif`, `fileinfo`; `gd` optional for report thumbnails), Composer, Node 18+, MySQL (XAMPP).
 
 ```bash
 composer install
@@ -72,13 +89,25 @@ Optional: `php artisan havens:import` downloads **real** police stations / hospi
 | admin@test.com | super_admin (also manages users) |
 
 ### Optional free keys (`.env`) — the app works without all of them
-| Key | Gives you | Without it |
+| Key | Breaks? | Fallback behaviour |
 |---|---|---|
-| `GEMINI_API_KEY` ([aistudio.google.com/apikey](https://aistudio.google.com/apikey)) | LLM report analysis, embeddings, planner, venue coach | built-in Bangla/Banglish keyword analyzer + local similarity + rule-based planner/tips |
-| `ORS_API_KEY` ([openrouteservice.org](https://openrouteservice.org)) | OpenRouteService alternatives | public OSRM demo server |
-| `TELEGRAM_BOT_TOKEN` (@BotFather) | Telegram alerts to contacts who gave their chat ID | email alerts only (`MAIL_MAILER=log` writes them to `storage/logs/laravel.log`) |
+| `GEMINI_API_KEY` ([aistudio.google.com/apikey](https://aistudio.google.com/apikey)) | ❌ No | Built-in Bangla/Banglish keyword analyzer + local hashed-n-gram similarity + rule-based planner/tips |
+| `ORS_API_KEY` ([openrouteservice.org](https://openrouteservice.org)) | ❌ No | Public OSRM demo server (prototype-grade, may be slow) |
+| `TELEGRAM_BOT_TOKEN` (@BotFather) | ❌ No | Email alerts only (`MAIL_MAILER=log` writes to `storage/logs/laravel.log`) |
+| `APP_URL` (tunnel via cloudflared/ngrok) | ⚠️ Partial | Live trip links work on the same LAN only; contacts off-network cannot open them |
 
 Model names and free-tier limits change — verify them in Google AI Studio before the demo. Set `NIGHTLIFE_USE_QUEUE=true` and run `php artisan queue:work` if you prefer a real queue.
+
+### Report photo storage and privacy
+Report evidence is stored on Laravel's private `local` disk (`storage/app/private/reports`), **not** under `public/`. `php artisan storage:link` is not needed for report photos. Images are served through the authorization-checked `reports.photos.show` route:
+
+- **Verified** report photos are public because they appear on public venue pages.
+- **Pending** and **rejected** report photos are visible only to the reporter and to staff.
+- Photos for **age-restricted venues** follow the venue age gate: public visitors must confirm they are 18+ before the photo route serves them; the reporter and staff keep access for moderation.
+
+Uploads are re-checked server-side for real image content, MIME type, size (5 MB) and dimensions (8000 × 8000 max). EXIF/XMP/IPTC metadata and PNG/WebP text/EXIF chunks are removed with pure PHP, and the sanitized file is re-parsed and verified before it is stored. If metadata removal cannot be verified, the upload is rejected. GD is optional: when it is installed a genuine 400 px thumbnail is generated; when it is absent the sanitized original is used as the thumbnail path, so no duplicate full-size "thumbnail" is kept.
+
+If you are upgrading an installation that already has files under `storage/app/public/reports`, move them to `storage/app/private/reports` before relying on the new route. Photos uploaded before this change were **not** sanitized; review or re-upload them if they may contain GPS metadata.
 
 ### Testing on a phone
 Geolocation, the service worker and "Add to Home Screen" need **HTTPS** (or localhost). Expose your laptop with `cloudflared tunnel --url http://127.0.0.1:8000` or `ngrok http 8000`; set `APP_URL` to the tunnel URL so live-trip links work for your contacts.
@@ -86,6 +115,9 @@ Geolocation, the service worker and "Add to Home Screen" need **HTTPS** (or loca
 ---
 
 ## 3. 5-minute demo script
+
+> **Before repeating the demo**: run `php artisan demo:reset` to clear trips, timers, dark spots and reset trust scores without re-seeding. Use `--yes` to skip the confirmation prompt.
+
 1. **Explore** (`/venues`) — switch the time selector from *Evening* to *Late night*: badges change. Open a venue → "Why this score?" per time bucket.
 2. Log in as `user@test.com` → **Report** in Bangla: `রাত ১১টায় ধানমন্ডি ২৭ এর কাছে আলো নেই, ছিনতাইয়ের চেষ্টা হয়েছে` → *My reports* shows the AI category/severity.
 3. Log in as `safety@test.com` → **Moderate reports**: queue sorted by severity with AI summary, spam %, duplicates. Verify → the venue score and reporter trust update.
@@ -100,7 +132,7 @@ Geolocation, the service worker and "Add to Home Screen" need **HTTPS** (or loca
 ```bash
 php artisan test
 ```
-Covers auth/roles, contact limit & phone validation, venue approval flow and age gate, report validation (500 chars), offline AI classification (Bangla, Banglish, English), duplicate detection, score time-awareness & explanation, moderation → trust update, safe-route scoring (sampling, incidents, dark spots, havens, 30% rule), routing-API failure fallback, night-planner budget/caution rules, trip link expiry (410), timers (dead-man switch), SOS audit log and nearest help points. Tests use in-memory SQLite and never call external APIs.
+Covers auth/roles, contact limit & phone validation, venue approval flow and age gate, report validation (500 chars), offline AI classification (Bangla, Banglish, English), duplicate detection, score time-awareness & explanation, moderation → trust update, safe-route scoring (sampling, incidents, dark spots, havens, 30% rule), routing-API failure fallback, night-planner budget/caution rules, trip link expiry (410), timers (dead-man switch), SOS audit log and nearest help points, plus report-photo upload validation, EXIF/metadata stripping, private delivery authorization, thumbnails and file cleanup. Tests use in-memory SQLite, a fake `local` disk and never call external APIs.
 
 ## 5. Project structure
 ```
@@ -114,11 +146,14 @@ database/seeders/      Roles/accounts · Venues · SafeHavens · DemoReports
 ```
 
 ## 6. Honest limitations
-* Bangladesh has no open crime dataset: risk comes from **community-verified reports + OpenStreetMap help points**. Sparse data = weaker scores (the explanation says so).
-* Browsers cannot send SMS silently: SOS opens a **pre-filled SMS** per contact; email/Telegram are sent automatically. No SMS gateway, payments, native apps or 99.99 % uptime target.
-* Live trip sharing only works while the owner's browser tab stays open. Locations are deleted 72 h after a trip ends.
-* Free AI quotas are limited; the offline analyzer is a fallback and less accurate than Gemini (reports it analysed are flagged for review).
-* Public OSRM demo server is for prototypes only; use an ORS key for steadier results. Routing profile is driving (CNG / car / ride-share).
+* **No open crime dataset**: Risk comes from **community-verified reports + OpenStreetMap help points**. Sparse data = weaker scores — the explainability text says so explicitly.
+* **Browsers cannot send SMS silently**: SOS opens a **pre-filled SMS** per contact; email/Telegram are sent automatically. No SMS gateway, payments, native apps or 99.99 % uptime target.
+* **Live trip sharing**: Only works while the owner's browser tab stays open. Locations are deleted 72 h after a trip ends.
+* **Free AI quota fragility**: Gemini free-tier quotas can run out mid-demo. The offline `LocalAnalyzer` is the fallback — it is less accurate (reports flagged for review), but the app continues to function.
+* **OSRM public server**: For prototypes only; use an ORS key for steadier routing. Routing profile is driving (CNG / car / ride-share).
+* **Lexicon bias in `LocalAnalyzer`**: The Bangla/Banglish keyword lexicon was hand-crafted. It will produce false positives/negatives for regional dialects, slang, and new vocabulary not in the list.
+* **Reporter trust feedback loop**: A malicious actor who submits many reports that moderators verify gains a high trust score. Their subsequent negative reports then carry more weight in the safety score formula. Mitigated by moderator oversight and the Laplace-smoothed trust formula, but acknowledged as a limitation.
+* **Cold start**: The safety score formula is correct but has limited signal without community data. At real launch every venue would initially show a checklist-only score.
 * Seed data is fictional. Do not publish incident claims about real businesses without evidence and moderation.
 * Test passwords in the seeder are for local development only.
 
