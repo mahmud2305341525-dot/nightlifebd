@@ -14,6 +14,20 @@ return [
     |
     */
 
+    'gemini' => [
+        'key' => env('GEMINI_API_KEY'),
+        'model' => env('GEMINI_MODEL', 'gemini-2.5-flash'),
+        'embed_model' => env('GEMINI_EMBED_MODEL', 'gemini-embedding-001'),
+    ],
+
+    'ors' => [
+        'key' => env('ORS_API_KEY'),
+    ],
+
+    'telegram' => [
+        'token' => env('TELEGRAM_BOT_TOKEN'),
+    ],
+
     'postmark' => [
         'key' => env('POSTMARK_API_KEY'),
     ],

@@ -2,48 +2,72 @@
 
 namespace App\Models;
 
-// use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Spatie\Permission\Traits\HasRoles;
 
 class User extends Authenticatable
 {
     /** @use HasFactory<UserFactory> */
-    use HasFactory, Notifiable;
+    use HasFactory, HasRoles, Notifiable;
 
-    /**
-     * The attributes that are mass assignable.
-     *
-     * @var list<string>
-     */
     protected $fillable = [
-        'name',
-        'email',
-        'password',
+        'name', 'email', 'password',
+        'phone', 'gender', 'city', 'is_adult_confirmed', 'trust_score',
+        'telegram_chat_id', 'locale', 'is_banned',
     ];
 
-    /**
-     * The attributes that should be hidden for serialization.
-     *
-     * @var list<string>
-     */
-    protected $hidden = [
-        'password',
-        'remember_token',
-    ];
+    protected $hidden = ['password', 'remember_token'];
 
-    /**
-     * Get the attributes that should be cast.
-     *
-     * @return array<string, string>
-     */
     protected function casts(): array
     {
         return [
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
+            'is_adult_confirmed' => 'boolean',
+            'is_banned' => 'boolean',
+            'trust_score' => 'float',
         ];
+    }
+
+    public function emergencyContacts(): HasMany
+    {
+        return $this->hasMany(EmergencyContact::class);
+    }
+
+    public function reports(): HasMany
+    {
+        return $this->hasMany(Report::class);
+    }
+
+    public function venues(): HasMany
+    {
+        return $this->hasMany(Venue::class, 'owner_id');
+    }
+
+    public function trips(): HasMany
+    {
+        return $this->hasMany(Trip::class);
+    }
+
+    public function safetyTimers(): HasMany
+    {
+        return $this->hasMany(SafetyTimer::class);
+    }
+
+    public function isStaff(): bool
+    {
+        return $this->hasAnyRole(['safety_admin', 'super_admin']);
+    }
+
+    /** Reporter trust = (verified + 1) / (verified + rejected + 2). A new user starts at 0.5. */
+    public function recalcTrust(): void
+    {
+        $verified = $this->reports()->where('status', 'verified')->count();
+        $rejected = $this->reports()->where('status', 'rejected')->count();
+        $this->forceFill(['trust_score' => round(($verified + 1) / ($verified + $rejected + 2), 2)])->save();
     }
 }
