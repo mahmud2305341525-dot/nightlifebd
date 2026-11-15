@@ -26,6 +26,11 @@ class ProfileUpdateRequest extends FormRequest
                 'max:255',
                 Rule::unique(User::class)->ignore($this->user()->id),
             ],
+            'phone' => ['nullable', 'regex:/^01[3-9]\d{8}$/'],
+            'gender' => ['nullable', 'in:female,male,other'],
+            'city' => ['nullable', 'string', 'max:60'],
+            'telegram_chat_id' => ['nullable', 'regex:/^-?\d{5,20}$/'],
+            'is_adult_confirmed' => ['nullable', 'boolean'],
         ];
     }
 }
