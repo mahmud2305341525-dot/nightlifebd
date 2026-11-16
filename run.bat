@@ -22,6 +22,8 @@ if %ERRORLEVEL% equ 0 (
 
 :: Navigate to project directory
 cd /d "%~dp0"
+if exist "nightlifebd-main" cd nightlifebd-main
+if exist "nightlifebd" cd nightlifebd
 
 :: Open browser
 echo [INFO] Opening http://127.0.0.1:8000 in your browser...

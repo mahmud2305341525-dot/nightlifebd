@@ -47,6 +47,38 @@
             @endif
         </div>
 
+
+        <div class="grid grid-cols-2 gap-4">
+            <div>
+                <x-input-label for="phone" :value="__('Mobile number')" />
+                <x-text-input id="phone" name="phone" type="text" class="mt-1 block w-full" placeholder="01XXXXXXXXX" :value="old('phone', $user->phone)" />
+                <x-input-error class="mt-2" :messages="$errors->get('phone')" />
+            </div>
+            <div>
+                <x-input-label for="city" :value="__('City')" />
+                <x-text-input id="city" name="city" type="text" class="mt-1 block w-full" :value="old('city', $user->city)" />
+            </div>
+            <div>
+                <x-input-label for="gender" :value="__('Gender (optional)')" />
+                <select id="gender" name="gender" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm">
+                    <option value="">-</option>
+                    @foreach (['female' => 'Female', 'male' => 'Male', 'other' => 'Other'] as $k => $l)
+                        <option value="{{ $k }}" @selected(old('gender', $user->gender) === $k)>{{ __($l) }}</option>
+                    @endforeach
+                </select>
+            </div>
+            <div>
+                <x-input-label for="telegram_chat_id" :value="__('My Telegram chat ID (optional)')" />
+                <x-text-input id="telegram_chat_id" name="telegram_chat_id" type="text" class="mt-1 block w-full" :value="old('telegram_chat_id', $user->telegram_chat_id)" />
+                <x-input-error class="mt-2" :messages="$errors->get('telegram_chat_id')" />
+            </div>
+        </div>
+
+        <label class="flex items-center gap-2 text-sm text-gray-700">
+            <input type="checkbox" name="is_adult_confirmed" value="1" class="rounded border-gray-300" @checked(old('is_adult_confirmed', $user->is_adult_confirmed))>
+            {{ __('I confirm I am 18 or older (needed to see restricted venue categories)') }}
+        </label>
+
         <div class="flex items-center gap-4">
             <x-primary-button>{{ __('Save') }}</x-primary-button>
 
