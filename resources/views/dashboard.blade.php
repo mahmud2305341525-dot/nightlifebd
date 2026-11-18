@@ -60,12 +60,12 @@
             <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
                 @foreach ([
                     ['reports.create', '📝', __('Report'),        'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-800 dark:text-slate-100'],
+                    ['events.index',   '🎸', __('Concerts'),      'bg-purple-50 dark:bg-purple-950/40 border border-purple-100 dark:border-purple-800/60 hover:bg-purple-100 dark:hover:bg-purple-900/50 text-purple-950 dark:text-purple-200'],
                     ['route.index',    '🛣️', __('Safe Route'),   'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-800 dark:text-slate-100'],
                     ['planner.index',  '🌙', __('Night Planner'), 'bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-100 dark:border-indigo-800/60 hover:bg-indigo-100 dark:hover:bg-indigo-900/50 text-indigo-950 dark:text-indigo-200'],
                     ['trips.index',    '📍', __('Live trip'),     'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-800 dark:text-slate-100'],
                     ['timer.index',    '⏱️', __('Safety timer'),  'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-800 dark:text-slate-100'],
                     ['fakecall',       '📞', __('Fake call'),     'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-800 dark:text-slate-100'],
-                    ['near-me',        '🏥', __('Near Me'),       'bg-blue-50 dark:bg-blue-950/40 border border-blue-100 dark:border-blue-800/60 hover:bg-blue-100 dark:hover:bg-blue-900/50 text-blue-950 dark:text-blue-200'],
                     ['heatmap.index',  '🔥', __('Heatmap'),       'bg-orange-50 dark:bg-orange-950/40 border border-orange-100 dark:border-orange-800/60 hover:bg-orange-100 dark:hover:bg-orange-900/50 text-orange-950 dark:text-orange-200'],
                 ] as [$r, $icon, $label, $cls])
                     <a href="{{ route($r) }}" class="{{ $cls }} rounded-xl shadow-sm p-4 text-center transition-all duration-150 active:scale-95 block">
@@ -75,6 +75,57 @@
                 @endforeach
             </div>
         </div>
+
+        {{-- Upcoming Night Events / Concerts Showcase --}}
+        @if (isset($featuredEvents) && $featuredEvents->isNotEmpty())
+            <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-sm p-5 space-y-4">
+                <div class="flex items-center justify-between">
+                    <h3 class="font-bold text-sm text-slate-900 dark:text-slate-100 flex items-center gap-2">
+                        <span>🎸</span>
+                        <span>{{ __('Concerts & Night Events in Dhaka') }}</span>
+                    </h3>
+                    <a href="{{ route('events.index') }}" class="text-xs font-semibold text-indigo-600 dark:text-indigo-400 hover:underline">
+                        {{ __('View All Events') }} →
+                    </a>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    @foreach ($featuredEvents as $evt)
+                        @php $sScore = $evt->getVenueSafetyScore(); @endphp
+                        <div class="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-700/60 flex flex-col justify-between gap-3">
+                            <div class="space-y-1.5">
+                                <div class="flex items-center justify-between text-xs">
+                                    <span class="font-bold text-indigo-600 dark:text-indigo-400">{{ $evt->categoryLabel() }}</span>
+                                    <span class="text-slate-500 dark:text-slate-400">📍 {{ $evt->area }}</span>
+                                </div>
+                                <h4 class="font-bold text-sm text-slate-900 dark:text-slate-100">
+                                    <a href="{{ route('events.show', $evt->slug) }}" class="hover:underline">
+                                        {{ $evt->title }}
+                                    </a>
+                                </h4>
+                                <p class="text-xs text-slate-500 dark:text-slate-400">
+                                    🗓️ {{ $evt->starts_at->format('D, d M · h:i A') }} · {{ $evt->venue ? $evt->venue->name : $evt->address }}
+                                </p>
+                            </div>
+
+                            <div class="flex items-center justify-between pt-2 border-t border-slate-200/60 dark:border-slate-700/60 text-xs">
+                                @if ($sScore !== null)
+                                    <span class="font-semibold {{ $sScore >= 70 ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600 dark:text-amber-400' }}">
+                                        🛡️ {{ __('Safety') }}: {{ round($sScore) }}/100
+                                    </span>
+                                @else
+                                    <span class="text-slate-400 text-[11px]">🛡️ Verified safety</span>
+                                @endif
+
+                                <a href="{{ route('events.show', $evt->slug) }}" class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-bold transition">
+                                    {{ __('Book Pass') }}
+                                </a>
+                            </div>
+                        </div>
+                    @endforeach
+                </div>
+            </div>
+        @endif
 
         {{-- Active tools + caution venues --}}
         <div class="grid md:grid-cols-2 gap-4">

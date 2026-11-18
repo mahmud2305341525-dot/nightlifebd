@@ -6,6 +6,9 @@ use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DataPrivacyController;
 use App\Http\Controllers\DemoSimulatorController;
 use App\Http\Controllers\EmergencyContactController;
+use App\Http\Controllers\EventBookingController;
+use App\Http\Controllers\EventController;
+use App\Http\Controllers\EventNotificationController;
 use App\Http\Controllers\HealthController;
 use App\Http\Controllers\HeatmapController;
 use App\Http\Controllers\LocaleController;
@@ -32,6 +35,9 @@ Route::view('/how-it-works', 'how-it-works')->name('how-it-works');
 
 Route::get('/venues', [VenueController::class, 'index'])->name('venues.index');
 Route::get('/venues/{venue}', [VenueController::class, 'show'])->whereNumber('venue')->name('venues.show');
+
+Route::get('/events', [EventController::class, 'index'])->name('events.index');
+Route::get('/events/{event:slug}', [EventController::class, 'show'])->name('events.show');
 
 Route::get('/route', [RouteController::class, 'index'])->name('route.index');
 Route::post('/route/compute', [RouteController::class, 'compute'])->middleware('throttle:20,1')->name('route.compute');
@@ -96,6 +102,14 @@ Route::middleware(['auth', 'not_banned'])->group(function () {
     Route::delete('/timer/{timer}', [TimerController::class, 'destroy'])->name('timer.destroy');
 
     Route::view('/fake-call', 'fakecall')->name('fakecall');
+
+    /* Events & Bookings */
+    Route::post('/events/{event}/book', [EventBookingController::class, 'store'])->whereNumber('event')->name('events.book');
+    Route::get('/events/passes/{reference}', [EventBookingController::class, 'show'])->name('events.bookings.show');
+    Route::get('/my-bookings', [EventBookingController::class, 'mine'])->name('events.bookings.mine');
+    Route::post('/events/bookings/{booking}/cancel', [EventBookingController::class, 'cancel'])->name('events.bookings.cancel');
+    Route::get('/notifications/events', [EventNotificationController::class, 'index'])->name('events.notifications');
+    Route::get('/api/notifications/unread-count', [EventNotificationController::class, 'unreadCount'])->name('api.notifications.unread');
 });
 
 /* ---------- venue partners ---------- */
@@ -129,6 +143,13 @@ Route::middleware(['auth', 'not_banned', 'role:safety_admin|super_admin'])->pref
     Route::get('/flags', [Admin\ReportFlagModerationController::class, 'index'])->name('flags.index');
     Route::post('/flags/{flag}/dismiss', [Admin\ReportFlagModerationController::class, 'dismiss'])->name('flags.dismiss');
     Route::post('/flags/{flag}/resolve', [Admin\ReportFlagModerationController::class, 'resolve'])->name('flags.resolve');
+
+    /* Event Moderation & Scanner */
+    Route::get('/events', [Admin\EventModerationController::class, 'index'])->name('events.index');
+    Route::get('/events/create', [Admin\EventModerationController::class, 'create'])->name('events.create');
+    Route::post('/events', [Admin\EventModerationController::class, 'store'])->name('events.store');
+    Route::get('/events/scanner', [Admin\EventModerationController::class, 'scanner'])->name('events.scanner');
+    Route::post('/events/check-in', [Admin\EventModerationController::class, 'verifyCheckIn'])->name('events.checkin');
 });
 Route::middleware(['auth', 'not_banned', 'role:super_admin'])->prefix('admin')->name('admin.')->group(function () {
     Route::get('/users', [Admin\UserController::class, 'index'])->name('users');

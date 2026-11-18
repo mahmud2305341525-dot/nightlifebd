@@ -1,12 +1,14 @@
 @php
     $main = [
         ['venues.index', __('Explore'), 'venues.*'],
+        ['events.index', __('Events'), 'events.*'],
         ['route.index', __('Safe Route'), 'route.*'],
         ['heatmap.index', __('Heatmap'), 'heatmap.*'],
         ['planner.index', __('Night Planner'), 'planner.*'],
         ['near-me', __('Near Me'), 'near-me'],
     ];
     $tools = [
+        ['events.bookings.mine', __('My Event Passes')],
         ['reports.create', __('Report an incident / review')],
         ['reports.mine', __('My reports')],
         ['trips.index', __('Live trip & ride check-in')],
@@ -45,6 +47,14 @@
                     <span class="night-icon" id="night-icon">🌙</span>
                 </button>
 
+                @auth
+                    <a href="{{ route('events.notifications') }}"
+                       class="p-1.5 rounded-md border border-slate-300 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition text-xs flex items-center gap-1 cursor-pointer focus:outline-none"
+                       title="{{ __('Concert & Event Alerts') }}">
+                        <span>🔔</span>
+                    </a>
+                @endauth
+
                 <div class="text-xs border border-slate-300 dark:border-slate-700 rounded-md overflow-hidden flex">
                     <a href="{{ route('lang', 'en') }}" class="px-2 py-1 {{ app()->getLocale() === 'en' ? 'bg-slate-900 dark:bg-indigo-600 text-white' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800' }}">EN</a>
                     <a href="{{ route('lang', 'bn') }}" class="px-2 py-1 {{ app()->getLocale() === 'bn' ? 'bg-slate-900 dark:bg-indigo-600 text-white' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800' }}">বাং</a>
@@ -74,6 +84,7 @@
                                 @endhasanyrole
                             @hasanyrole('safety_admin|super_admin')
                                     <x-dropdown-link :href="route('admin.dashboard')">{{ __('Analytics dashboard') }}</x-dropdown-link>
+                                    <x-dropdown-link :href="route('admin.events.index')">{{ __('Events & Scanner') }}</x-dropdown-link>
                                     <x-dropdown-link :href="route('admin.reports')">{{ __('Moderate reports') }}</x-dropdown-link>
                                     <x-dropdown-link :href="route('admin.flags.index')">{{ __('Abuse & Flags') }}</x-dropdown-link>
                                     <x-dropdown-link :href="route('admin.venues')">{{ __('Approve venues') }}</x-dropdown-link>
@@ -130,6 +141,7 @@
             @endhasanyrole
             @hasanyrole('safety_admin|super_admin')
                 <a href="{{ route('admin.dashboard') }}" class="block {{ $linkClass(false) }}">{{ __('Analytics dashboard') }}</a>
+                <a href="{{ route('admin.events.index') }}" class="block {{ $linkClass(false) }}">{{ __('Events & Scanner') }}</a>
                 <a href="{{ route('admin.reports') }}" class="block {{ $linkClass(false) }}">{{ __('Moderate reports') }}</a>
                 <a href="{{ route('admin.flags.index') }}" class="block {{ $linkClass(false) }}">{{ __('Abuse & Flags') }}</a>
                 <a href="{{ route('admin.venues') }}" class="block {{ $linkClass(false) }}">{{ __('Approve venues') }}</a>

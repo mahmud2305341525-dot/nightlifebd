@@ -59,6 +59,16 @@ class User extends Authenticatable
         return $this->hasMany(SafetyTimer::class);
     }
 
+    public function eventBookings(): HasMany
+    {
+        return $this->hasMany(EventBooking::class);
+    }
+
+    public function eventNotifications(): HasMany
+    {
+        return $this->hasMany(EventNotification::class);
+    }
+
     public function favoriteVenues(): BelongsToMany
     {
         return $this->belongsToMany(Venue::class, 'venue_favorites')->withPivot('created_at');

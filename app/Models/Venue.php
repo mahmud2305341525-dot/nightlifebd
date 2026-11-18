@@ -60,6 +60,11 @@ class Venue extends Model
         return $this->hasMany(VenueScore::class);
     }
 
+    public function events(): HasMany
+    {
+        return $this->hasMany(Event::class);
+    }
+
     public function favoritedBy(): BelongsToMany
     {
         return $this->belongsToMany(User::class, 'venue_favorites')->withPivot('created_at');
