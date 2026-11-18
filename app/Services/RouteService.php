@@ -53,11 +53,12 @@ class RouteService
      * @throws \InvalidArgumentException when coordinates are invalid or too close
      * @throws \RuntimeException when no routing service is reachable or destination is unreachable
      */
-    public function compute(float $fromLat, float $fromLng, float $toLat, float $toLng, string $bucket): array
+    public function compute(float $fromLat, float $fromLng, float $toLat, float $toLng, string $bucket, string $mode = 'driving'): array
     {
+        $mode = in_array($mode, ['driving', 'walking'], true) ? $mode : 'driving';
         $this->validateCoordinates($fromLat, $fromLng, $toLat, $toLng);
 
-        [$raw, $source] = $this->fetchAlternatives($fromLat, $fromLng, $toLat, $toLng);
+        [$raw, $source] = $this->fetchAlternatives($fromLat, $fromLng, $toLat, $toLng, $mode);
 
         $all = [];
         foreach ($raw as $r) {
@@ -103,6 +104,7 @@ class RouteService
         unset($rt);
 
         return [
+            'mode' => $mode,
             'routes' => $routes,
             'fastest' => $fastest,
             'safest' => $safest,
@@ -456,29 +458,35 @@ class RouteService
     }
 
     /** @return array{0:array,1:string} list of ['coords','distance','duration'] and the provider name */
-    private function fetchAlternatives(float $fLat, float $fLng, float $tLat, float $tLng): array
+    private function fetchAlternatives(float $fLat, float $fLng, float $tLat, float $tLng, string $mode = 'driving'): array
     {
-        $cacheKey = sprintf('route_geom_%s_%s_%s_%s', round($fLat, 4), round($fLng, 4), round($tLat, 4), round($tLng, 4));
+        $cacheKey = sprintf('route_geom_%s_%s_%s_%s_%s', $mode, round($fLat, 4), round($fLng, 4), round($tLat, 4), round($tLng, 4));
 
-        return Cache::remember($cacheKey, now()->addMinutes(30), function () use ($fLat, $fLng, $tLat, $tLng) {
-            return $this->fetchFromProviders($fLat, $fLng, $tLat, $tLng);
+        return Cache::remember($cacheKey, now()->addMinutes(30), function () use ($fLat, $fLng, $tLat, $tLng, $mode) {
+            return $this->fetchFromProviders($fLat, $fLng, $tLat, $tLng, $mode);
         });
     }
 
     /**
      * Call external routing APIs (ORS / OSRM) with robust error classification and sanitized logging.
+     * Supports both driving and walking travel modes.
      *
      * @return array{0:array, 1:string}
      */
-    public function fetchFromProviders(float $fLat, float $fLng, float $tLat, float $tLng): array
+    public function fetchFromProviders(float $fLat, float $fLng, float $tLat, float $tLng, string $mode = 'driving'): array
     {
         $errors = [];
+        $isWalking = ($mode === 'walking');
 
         // 1. Try OpenRouteService if API key configured
         if (filled(config('services.ors.key'))) {
             try {
+                $endpoint = $isWalking
+                    ? 'https://api.openrouteservice.org/v2/directions/foot-walking/geojson'
+                    : 'https://api.openrouteservice.org/v2/directions/driving-car/geojson';
+
                 $res = Http::timeout(10)->withHeaders(['Authorization' => config('services.ors.key')])
-                    ->post('https://api.openrouteservice.org/v2/directions/driving-car/geojson', [
+                    ->post($endpoint, [
                         'coordinates' => [[$fLng, $fLat], [$tLng, $tLat]],
                         'alternative_routes' => ['target_count' => 3, 'share_factor' => 0.6, 'weight_factor' => 1.6],
                     ]);
@@ -496,7 +504,7 @@ class RouteService
                         }
                     }
                     if ($out) {
-                        return [$out, 'OpenRouteService'];
+                        return [$out, 'OpenRouteService ('.$mode.')'];
                     }
                     $errors[] = 'ORS returned empty routes';
                 } elseif ($res->status() === 429) {
@@ -513,7 +521,8 @@ class RouteService
 
         // 2. Fallback to public OSRM server
         try {
-            $url = sprintf('https://router.project-osrm.org/route/v1/driving/%F,%F;%F,%F', $fLng, $fLat, $tLng, $tLat);
+            $osrmProfile = $isWalking ? 'foot' : 'driving';
+            $url = sprintf('https://router.project-osrm.org/route/v1/%s/%F,%F;%F,%F', $osrmProfile, $fLng, $fLat, $tLng, $tLat);
             $res = Http::timeout(15)->get($url, [
                 'alternatives' => 'true',
                 'overview' => 'full',
@@ -521,26 +530,43 @@ class RouteService
                 'steps' => 'false',
             ]);
 
+            // If walking is requested but public OSRM rejected foot (e.g. 400 or NoRoute on demo server),
+            // gracefully fallback to driving geometry and convert duration to walking speed (~4.8 km/h or 1.33 m/s)
+            // without fabricating routes or breaking.
+            if (! $res->successful() && $isWalking) {
+                $drivingUrl = sprintf('https://router.project-osrm.org/route/v1/driving/%F,%F;%F,%F', $fLng, $fLat, $tLng, $tLat);
+                $res = Http::timeout(15)->get($drivingUrl, [
+                    'alternatives' => 'true',
+                    'overview' => 'full',
+                    'geometries' => 'geojson',
+                    'steps' => 'false',
+                ]);
+            }
+
             if ($res->successful()) {
                 $json = $res->json();
                 if (! is_array($json)) {
                     $errors[] = 'OSRM malformed JSON';
                 } elseif (($json['code'] ?? '') === 'NoRoute') {
-                    throw new \RuntimeException(__('No drivable route found between these locations. The start or destination may be inaccessible by road.'));
+                    throw new \RuntimeException($isWalking
+                        ? __('No walking route found between these locations.')
+                        : __('No drivable route found between these locations. The start or destination may be inaccessible by road.'));
                 } else {
                     $routes = $json['routes'] ?? [];
                     $out = [];
                     foreach ($routes as $r) {
                         if (isset($r['geometry']['coordinates']) && is_array($r['geometry']['coordinates']) && count($r['geometry']['coordinates']) > 0) {
+                            $dist = (float) ($r['distance'] ?? 0);
+                            $dur = $isWalking ? round($dist / 1.33) : (float) ($r['duration'] ?? 0);
                             $out[] = [
                                 'coords' => $r['geometry']['coordinates'],
-                                'distance' => (float) ($r['distance'] ?? 0),
-                                'duration' => (float) ($r['duration'] ?? 0),
+                                'distance' => $dist,
+                                'duration' => $dur,
                             ];
                         }
                     }
                     if ($out) {
-                        return [$out, 'OSRM (public demo server)'];
+                        return [$out, 'OSRM ('.$mode.')'];
                     }
                     $errors[] = 'OSRM returned 0 routes';
                 }

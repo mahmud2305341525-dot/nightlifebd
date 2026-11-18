@@ -48,7 +48,7 @@ class VenueController extends Controller
 
         $venue->load('scores');
         $reports = Report::verified()->where('venue_id', $venue->id)->whereNull('duplicate_of')
-            ->withCount('duplicates')->with(['user:id,name', 'photos'])->latest('incident_time')->limit(8)->get();
+            ->withCount('duplicates')->with(['user:id,name', 'photos', 'approvedResponses.user'])->latest('incident_time')->limit(8)->get();
 
         // Reviews data
         $reviews = Report::verified()

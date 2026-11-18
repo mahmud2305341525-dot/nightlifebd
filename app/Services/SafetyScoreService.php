@@ -61,7 +61,15 @@ class SafetyScoreService
             $scores[$bucket] = $r;
             VenueScore::updateOrCreate(
                 ['venue_id' => $v->id, 'bucket' => $bucket],
-                ['score' => $r['score'], 'badge' => $r['badge'], 'explanation' => $r['explanation'], 'report_count' => $r['count']]
+                [
+                    'score' => $r['score'],
+                    'badge' => $r['badge'],
+                    'explanation' => $r['explanation'],
+                    'report_count' => $r['count'],
+                    'confidence_level' => $r['confidence']['level'],
+                    'evidence_count' => $r['confidence']['evidence_count'],
+                    'confidence_explanation' => $r['confidence']['explanation'],
+                ]
             );
         }
         $v->update(['safety_score' => $scores['night']['score'], 'badge' => $scores['night']['badge']]);
@@ -72,7 +80,7 @@ class SafetyScoreService
     {
         return Report::query()
             ->verified()
-            ->with('user:id,trust_score')
+            ->with(['user:id,trust_score', 'duplicates:id,duplicate_of,user_id'])
             ->withCount('duplicates')
             ->where(function ($q) use ($v) {
                 $q->where('venue_id', $v->id)->orWhere(function ($q2) use ($v) {
@@ -87,13 +95,16 @@ class SafetyScoreService
             ->values();
     }
 
-    /** @return array{score:int,badge:string,explanation:string,count:int,risk:float} */
+    /** @return array{score:int,badge:string,explanation:string,count:int,risk:float,confidence:array{level:string,score:int,evidence_count:int,independent_reporters:int,explanation:string}} */
     public function compute(Venue $v, Collection $reports, string $bucket): array
     {
         $risk = 0.0;
         $cats = [];
         $positives = 0;
         $count = 0;
+
+        $primaryReports = $reports->whereNull('duplicate_of');
+        $independentReporters = $primaryReports->pluck('user_id')->filter()->unique()->count();
 
         foreach ($reports as $r) {
             if ($r->duplicate_of) {
@@ -111,7 +122,13 @@ class SafetyScoreService
 
                 continue;
             }
-            $boost = 1 + 0.25 * min(3, (int) $r->duplicates_count);
+
+            // Anti-abuse: Corroboration boost strictly counts duplicates submitted by *other* independent users
+            $otherUserDuplicates = $r->relationLoaded('duplicates')
+                ? $r->duplicates->where('user_id', '!=', $r->user_id)->pluck('user_id')->unique()->count()
+                : (int) $r->duplicates_count;
+
+            $boost = 1 + 0.25 * min(3, $otherUserDuplicates);
             $risk += ((int) $r->severity) * $trust * $decay * $w * $boost;
             if ($w === 1.0 && $ageDays <= 30) {
                 $cats[$r->category ?? 'other'] = ($cats[$r->category ?? 'other'] ?? 0) + 1;
@@ -119,9 +136,18 @@ class SafetyScoreService
         }
         $risk = max(-3.0, $risk);
 
+        // Anti-manipulation safeguard: Single-reporter penalty damping
+        // If only 1 independent reporter submitted negative incidents, cap the uncorroborated penalty
+        // so one actor cannot single-handedly nuke a venue to zero without independent community corroboration
+        if ($count > 0 && $independentReporters <= 1 && $risk > 11.0) {
+            $risk = 11.0; // max ~55 point drop without independent community corroboration
+        }
+
         $base = 40 + ($v->has_cctv ? 20 : 0) + ($v->has_guard ? 20 : 0) + $v->lighting * 4;
         $score = (int) round(max(0, min(100, $base + self::BUCKET_ADJUST[$bucket] - $risk * 5)));
         $badge = $score >= 70 ? 'safe' : ($score >= 45 ? 'moderate' : 'caution');
+
+        $confidence = $this->computeConfidence($reports);
 
         return [
             'score' => $score,
@@ -129,6 +155,72 @@ class SafetyScoreService
             'count' => $count,
             'risk' => round($risk, 2),
             'explanation' => $this->explain($v, $badge, $bucket, $cats, $positives, $count),
+            'confidence' => $confidence,
+        ];
+    }
+
+    /**
+     * Separate confidence calculation reflecting evidence volume, reporter independence, and recency.
+     * Preserves the safety score formula and never presents confidence as a guarantee of safety.
+     *
+     * @return array{level:string,score:int,evidence_count:int,independent_reporters:int,explanation:string}
+     */
+    public function computeConfidence(Collection $reports): array
+    {
+        $primary = $reports->whereNull('duplicate_of');
+        $evidenceCount = $primary->count();
+        $independentReporters = $primary->pluck('user_id')->filter()->unique()->count();
+        $recentCount = $primary->filter(fn (Report $r) => $r->incident_time && $r->incident_time->gte(now()->subDays(60)))->count();
+
+        if ($evidenceCount === 0) {
+            return [
+                'level' => 'low',
+                'score' => 15,
+                'evidence_count' => 0,
+                'independent_reporters' => 0,
+                'explanation' => __('Checklist only (Low confidence: 0 community reports). Score is estimated from physical security features only.'),
+            ];
+        }
+
+        if ($independentReporters < 5) {
+            return [
+                'level' => 'low',
+                'score' => min(45, 15 + $independentReporters * 7),
+                'evidence_count' => $evidenceCount,
+                'independent_reporters' => $independentReporters,
+                'explanation' => __('Low confidence (:reporters independent reporter:s, :evidence verified report:es). Initial community signal; more evidence needed. Confidence reflects evidence volume, not guaranteed safety.', [
+                    'reporters' => $independentReporters,
+                    's' => $independentReporters > 1 ? 's' : '',
+                    'evidence' => $evidenceCount,
+                    'es' => $evidenceCount > 1 ? 's' : '',
+                ]),
+            ];
+        }
+
+        if ($independentReporters < 15) {
+            return [
+                'level' => 'moderate',
+                'score' => min(75, 45 + $independentReporters * 2 + ($recentCount > 0 ? 5 : 0)),
+                'evidence_count' => $evidenceCount,
+                'independent_reporters' => $independentReporters,
+                'explanation' => __('Moderate confidence (:reporters independent reporters, :evidence verified reports:recent). Corroborated across multiple community members. Confidence reflects evidence volume, not guaranteed safety.', [
+                    'reporters' => $independentReporters,
+                    'evidence' => $evidenceCount,
+                    'recent' => $recentCount > 0 ? ", {$recentCount} recent" : '',
+                ]),
+            ];
+        }
+
+        return [
+            'level' => 'high',
+            'score' => min(98, 80 + min(18, $independentReporters)),
+            'evidence_count' => $evidenceCount,
+            'independent_reporters' => $independentReporters,
+            'explanation' => __('High confidence (:reporters independent reporters, :evidence verified reports:recent). Strong, repeatedly corroborated community evidence. (Note: High confidence reflects evidence reliability, not an absolute guarantee of safety.)', [
+                'reporters' => $independentReporters,
+                'evidence' => $evidenceCount,
+                'recent' => $recentCount > 0 ? ", {$recentCount} recent" : '',
+            ]),
         ];
     }
 

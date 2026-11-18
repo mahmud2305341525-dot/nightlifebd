@@ -27,11 +27,13 @@ class RouteController extends Controller
             'to_lat' => ['required', 'numeric', 'between:20,27'],
             'to_lng' => ['required', 'numeric', 'between:88,93'],
             'bucket' => ['nullable', 'in:day,evening,night,late'],
+            'mode' => ['nullable', 'in:driving,walking'],
         ]);
         try {
             return response()->json($svc->compute(
                 (float) $d['from_lat'], (float) $d['from_lng'], (float) $d['to_lat'], (float) $d['to_lng'],
-                TimeBucket::normalize($d['bucket'] ?? null)
+                TimeBucket::normalize($d['bucket'] ?? null),
+                $d['mode'] ?? 'driving'
             ));
         } catch (\InvalidArgumentException $e) {
             return response()->json(['error' => $e->getMessage()], 422);

@@ -49,6 +49,18 @@ class ProfileController extends Controller
 
         $user = $request->user();
 
+        // Data Privacy & Safety Scoring Integrity:
+        // Disassociate and anonymize community reports so that personal user identity is completely removed
+        // while vital community incident evidence and venue safety scores remain preserved without foreign key errors.
+        \App\Models\Report::where('user_id', $user->id)->update([
+            'user_id' => null,
+            'is_anonymous' => true,
+        ]);
+
+        // Clean up user-specific private data
+        $user->emergencyContacts()->delete();
+        $user->trips()->delete();
+
         Auth::logout();
 
         $user->delete();

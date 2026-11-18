@@ -368,8 +368,8 @@ class ReportPhotoSecurityTest extends TestCase
         // Delete the parent report
         $report->delete();
 
-        // Database records and disk files must be cleanly deleted
-        $this->assertDatabaseMissing('reports', ['id' => $report->id]);
+        // Database records and disk files must be cleanly deleted / soft-deleted
+        $this->assertSoftDeleted('reports', ['id' => $report->id]);
         $this->assertDatabaseMissing('report_photos', ['id' => $photo->id]);
         $this->assertFalse($disk->exists($path));
         $this->assertFalse($disk->exists($thumb));

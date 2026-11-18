@@ -28,6 +28,18 @@ class Venue extends Model
 
     public const CATEGORIES = ['cafe', 'rooftop', 'restaurant', 'eatery', 'event', 'lounge'];
 
+    protected static function booted(): void
+    {
+        static::saving(function (Venue $venue) {
+            if ($venue->lighting !== null && ($venue->lighting < 1 || $venue->lighting > 5)) {
+                throw new \InvalidArgumentException('Lighting must be between 1 and 5');
+            }
+            if ($venue->price_tier !== null && ($venue->price_tier < 1 || $venue->price_tier > 3)) {
+                throw new \InvalidArgumentException('Price tier must be between 1 and 3');
+            }
+        });
+    }
+
     public function owner(): BelongsTo
     {
         return $this->belongsTo(User::class, 'owner_id');
@@ -36,6 +48,11 @@ class Venue extends Model
     public function reports(): HasMany
     {
         return $this->hasMany(Report::class);
+    }
+
+    public function reportResponses(): HasMany
+    {
+        return $this->hasMany(ReportResponse::class);
     }
 
     public function scores(): HasMany

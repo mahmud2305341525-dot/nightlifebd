@@ -7,15 +7,24 @@ use App\Models\AuditLog;
 use App\Models\Report;
 use App\Models\User;
 use App\Models\Venue;
+use App\Services\IncidentEvaluationService;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
 class DashboardController extends Controller
 {
-    public function __invoke()
+    public function __invoke(Request $request, IncidentEvaluationService $evaluator)
     {
         $now = now();
         $thirtyDaysAgo = $now->copy()->subDays(30);
         $sevenDaysAgo = $now->copy()->subDays(7);
+
+        // --- Production AI vs Moderator Evaluation ---
+        $evalFrom = $request->input('eval_from');
+        $evalTo = $request->input('eval_to');
+        $evalCategory = $request->input('eval_category');
+        $evalSource = $request->input('eval_source');
+        $evaluation = $evaluator->evaluateProductionDecisions($evalFrom, $evalTo, $evalCategory, $evalSource);
 
         // --- Report statistics ---
         $reportCounts = Report::query()
@@ -118,7 +127,8 @@ class DashboardController extends Controller
             'reportCounts', 'totalReports', 'reportsByCategory', 'trendFilled',
             'venueCount', 'pendingVenues', 'scoreDistribution', 'hotspots',
             'totalUsers', 'activeUsersWeek', 'newUsersWeek', 'bannedUsers',
-            'pendingReports', 'avgResolutionHours', 'recentActions'
+            'pendingReports', 'avgResolutionHours', 'recentActions',
+            'evaluation', 'evalFrom', 'evalTo', 'evalCategory', 'evalSource'
         ));
     }
 }

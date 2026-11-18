@@ -7,9 +7,12 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Report extends Model
 {
+    use SoftDeletes;
+
     protected $guarded = [];
 
     public const CATEGORIES = ['harassment', 'theft', 'violence', 'dark_road', 'overcharging', 'positive', 'other'];
@@ -31,9 +34,26 @@ class Report extends Model
 
     protected static function booted(): void
     {
+        static::saving(function (Report $report) {
+            if ($report->severity !== null && ($report->severity < 1 || $report->severity > 5)) {
+                throw new \InvalidArgumentException('Severity must be between 1 and 5');
+            }
+            if ($report->rating !== null && ($report->rating < 1 || $report->rating > 5)) {
+                throw new \InvalidArgumentException('Rating must be between 1 and 5');
+            }
+        });
+
         static::deleting(function (Report $report) {
             foreach ($report->photos as $photo) {
                 $photo->delete();
+            }
+
+            // Promote earliest duplicate so community corroborations survive deletion
+            // without turning into multiple independent incidents
+            $earliestDupe = $report->duplicates()->orderBy('id')->first();
+            if ($earliestDupe) {
+                $earliestDupe->update(['duplicate_of' => null]);
+                $report->duplicates()->where('id', '!=', $earliestDupe->id)->update(['duplicate_of' => $earliestDupe->id]);
             }
         });
     }
@@ -61,6 +81,21 @@ class Report extends Model
     public function photos(): HasMany
     {
         return $this->hasMany(ReportPhoto::class);
+    }
+
+    public function responses(): HasMany
+    {
+        return $this->hasMany(ReportResponse::class);
+    }
+
+    public function approvedResponses(): HasMany
+    {
+        return $this->hasMany(ReportResponse::class)->where('status', 'approved');
+    }
+
+    public function flags(): HasMany
+    {
+        return $this->hasMany(ReportFlag::class);
     }
 
     /** Is this a venue review with a star rating? */

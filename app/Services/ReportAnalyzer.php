@@ -46,8 +46,10 @@ class ReportAnalyzer
 
         // Update pre-triage predictions without altering report status or user permissions
         $report->fill([
-            'category' => $result['category'],
-            'severity' => $result['severity'],
+            'ai_category' => $result['category'],
+            'ai_severity' => $result['severity'],
+            'category' => $report->category ?: $result['category'],
+            'severity' => $report->severity ?: $result['severity'],
             'language' => $result['language'],
             'spam_probability' => $result['spam_probability'],
             'summary_en' => $result['summary_en'],

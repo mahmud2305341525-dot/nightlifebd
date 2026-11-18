@@ -111,7 +111,7 @@ class SafetyScoreEdgeCasesTest extends TestCase
         $terribleVenue = $this->makeVenue([
             'has_cctv' => false,
             'has_guard' => false,
-            'lighting' => 0,
+            'lighting' => 1,
         ]);
         $user = $this->userWithRole('user', ['trust_score' => 1.0]);
 

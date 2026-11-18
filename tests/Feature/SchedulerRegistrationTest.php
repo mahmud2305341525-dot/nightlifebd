@@ -33,6 +33,19 @@ class SchedulerRegistrationTest extends TestCase
         $this->assertSame('0 * * * *', $purgeEvent->expression, 'trips:purge must run hourly (0 * * * *).');
     }
 
+    public function test_trips_check_stale_command_is_registered_every_minute(): void
+    {
+        $schedule = app(Schedule::class);
+        $events = collect($schedule->events());
+
+        $staleEvent = $events->first(function ($event) {
+            return str_contains($event->command, 'trips:check-stale');
+        });
+
+        $this->assertNotNull($staleEvent, 'trips:check-stale must be registered in the console schedule.');
+        $this->assertSame('* * * * *', $staleEvent->expression, 'trips:check-stale must run every minute (* * * * *).');
+    }
+
     public function test_safety_recalculate_command_is_registered_daily(): void
     {
         $schedule = app(Schedule::class);

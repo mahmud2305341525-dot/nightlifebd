@@ -48,6 +48,26 @@ class ReportController extends Controller
             return back()->withInput()->withErrors(['venue_id' => 'Choose a venue or click the map to mark the place.']);
         }
 
+        // Anti-abuse: Per-user, per-venue cooldown (prevent targeted score manipulation of a single venue)
+        if (! empty($data['venue_id'])) {
+            $recentVenueReport = Report::where('user_id', $request->user()->id)
+                ->where('venue_id', $data['venue_id'])
+                ->where('created_at', '>=', now()->subHours(24))
+                ->exists();
+
+            if ($recentVenueReport) {
+                return back()->withInput()->withErrors([
+                    'venue_id' => __('You have already submitted a report for this venue within the last 24 hours. Multiple submissions are limited to prevent score manipulation.'),
+                ]);
+            }
+        }
+
+        // Anti-abuse: Suspicious reporting pattern detection (velocity burst: >= 3 submissions in 10 minutes)
+        $recentBurstCount = Report::where('user_id', $request->user()->id)
+            ->where('created_at', '>=', now()->subMinutes(10))
+            ->count();
+        $isBurstSubmission = ($recentBurstCount >= 3);
+
         // Deep binary & dimension validation before touching the database
         if ($request->hasFile('photos')) {
             foreach ($request->file('photos') as $file) {
@@ -62,7 +82,7 @@ class ReportController extends Controller
         $disk = Storage::disk(IncidentPhotoService::DISK);
 
         try {
-            $report = DB::transaction(function () use ($request, $data, $rating, $photoService, &$storedFiles) {
+            $report = DB::transaction(function () use ($request, $data, $rating, $isBurstSubmission, $photoService, &$storedFiles) {
                 $rep = Report::create([
                     'user_id' => $request->user()->id,
                     'venue_id' => $data['venue_id'] ?? null,
@@ -74,6 +94,7 @@ class ReportController extends Controller
                     'is_anonymous' => $request->boolean('is_anonymous'),
                     'rating' => $rating,
                     'status' => 'pending',
+                    'needs_review' => $isBurstSubmission,
                 ]);
 
                 if ($request->hasFile('photos')) {
@@ -92,7 +113,10 @@ class ReportController extends Controller
                     }
                 }
 
-                AuditLog::record($request->user()->id, 'report.submitted', ['report_id' => $rep->id]);
+                AuditLog::record($request->user()->id, 'report.submitted', [
+                    'report_id' => $rep->id,
+                    'velocity_flag' => $isBurstSubmission,
+                ]);
 
                 return $rep;
             });
@@ -116,5 +140,70 @@ class ReportController extends Controller
         return view('reports.mine', [
             'reports' => $request->user()->reports()->with(['venue:id,name', 'photos'])->latest()->paginate(15),
         ]);
+    }
+
+    public function edit(Request $request, Report $report)
+    {
+        abort_unless($report->user_id === $request->user()->id, 403, 'You can only edit your own reports.');
+        abort_unless($report->status === 'pending', 403, 'Only pending reports can be edited. This report has already been reviewed.');
+
+        return view('reports.edit', [
+            'report' => $report,
+        ]);
+    }
+
+    public function update(Request $request, Report $report)
+    {
+        abort_unless($report->user_id === $request->user()->id, 403, 'You can only edit your own reports.');
+        abort_unless($report->status === 'pending', 403, 'Only pending reports can be edited. This report has already been reviewed.');
+
+        $data = $request->validate([
+            'body' => ['required', 'string', 'min:10', 'max:500'],
+            'incident_time' => ['nullable', 'date', 'before_or_equal:now'],
+            'is_anonymous' => ['nullable', 'boolean'],
+            'rating' => ['nullable', 'integer', 'between:1,5'],
+        ], [
+            'body.max' => 'Reports are limited to 500 characters.',
+            'body.min' => 'Please describe what happened in at least 10 characters.',
+        ]);
+
+        $rating = ($report->kind === 'review' && ! empty($data['rating'])) ? (int) $data['rating'] : null;
+
+        $report->update([
+            'body' => strip_tags($data['body']),
+            'incident_time' => ! empty($data['incident_time']) ? Carbon::parse($data['incident_time']) : $report->incident_time,
+            'is_anonymous' => $request->boolean('is_anonymous'),
+            'rating' => $rating,
+            // Reset AI predictions for re-classification
+            'category' => null,
+            'severity' => null,
+            'ai_category' => null,
+            'ai_severity' => null,
+            'summary_en' => null,
+            'analysis_source' => null,
+        ]);
+
+        // Re-dispatch automated AI analyzer
+        AnalyzeReportJob::send($report->id);
+
+        AuditLog::record($request->user()->id, 'report.edited', [
+            'report_id' => $report->id,
+        ]);
+
+        return redirect()->route('reports.mine')->with('status', __('Your pending report has been updated and re-submitted for AI classification.'));
+    }
+
+    public function destroy(Request $request, Report $report)
+    {
+        abort_unless($report->user_id === $request->user()->id, 403, 'You can only withdraw your own reports.');
+        abort_unless($report->status === 'pending', 403, 'Only pending reports can be withdrawn. Verified or rejected reports cannot be deleted.');
+
+        $report->delete();
+
+        AuditLog::record($request->user()->id, 'report.withdrawn', [
+            'report_id' => $report->id,
+        ]);
+
+        return redirect()->route('reports.mine')->with('status', __('Your pending report has been successfully withdrawn.'));
     }
 }

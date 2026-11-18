@@ -54,7 +54,20 @@ class HealthController extends Controller
 
         // 3. Storage Directory & Private Incident Photo Disk Writeability Check
         try {
-            $frameworkWritable = is_writable(storage_path('framework')) && is_writable(storage_path('logs'));
+            $isDirWritable = function (string $dir): bool {
+                if (is_writable($dir)) {
+                    return true;
+                }
+                $probe = $dir.'/.write_probe_'.bin2hex(random_bytes(4));
+                $ok = @file_put_contents($probe, 'ok') !== false;
+                if ($ok) {
+                    @unlink($probe);
+                }
+
+                return $ok;
+            };
+
+            $frameworkWritable = $isDirWritable(storage_path('framework')) && $isDirWritable(storage_path('logs'));
 
             // Probe configured private incident-photo disk with a safe temporary probe file
             $photoDisk = Storage::disk(IncidentPhotoService::DISK);

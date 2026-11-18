@@ -69,7 +69,14 @@ class ReportPhotoController extends Controller
             'X-Frame-Options' => 'SAMEORIGIN',
         ];
 
-        $response = response()->file($fullSystemPath, $headers);
+        try {
+            $response = response()->file($fullSystemPath, $headers);
+        } catch (\Throwable) {
+            $temp = new \SplTempFileObject(-1);
+            $temp->fwrite($disk->get($relPath));
+            $temp->rewind();
+            $response = new BinaryFileResponse($temp, 200, $headers);
+        }
 
         if ($isPublic) {
             $response->setPublic();

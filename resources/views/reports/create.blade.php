@@ -1,20 +1,20 @@
 <x-app-layout>
     @include('partials.leaflet')
-    <x-slot name="header"><h2 class="font-semibold text-xl">{{ __('Report an incident or write a review') }}</h2></x-slot>
+    <x-slot name="header"><h2 class="font-semibold text-xl text-slate-800 dark:text-slate-100">{{ __('Report an incident or write a review') }}</h2></x-slot>
     <div class="max-w-2xl mx-auto p-4">
-        <form method="POST" action="{{ route('reports.store') }}" enctype="multipart/form-data" class="bg-white rounded-xl shadow-sm p-5 space-y-4">
+        <form method="POST" action="{{ route('reports.store') }}" enctype="multipart/form-data" class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-sm p-5 space-y-4">
             @csrf
             <div class="grid grid-cols-2 gap-2">
                 @foreach (['incident' => __('Incident / safety issue'), 'review' => __('Venue review')] as $k => $l)
-                    <label class="border rounded-lg p-3 text-sm cursor-pointer has-[:checked]:border-indigo-500 has-[:checked]:bg-indigo-50">
-                        <input type="radio" name="kind" value="{{ $k }}" class="me-2" @checked(old('kind', 'incident') === $k) id="kind_{{ $k }}">{{ $l }}
+                    <label class="border border-slate-200 dark:border-slate-700 rounded-lg p-3 text-sm cursor-pointer has-[:checked]:border-indigo-500 has-[:checked]:bg-indigo-50 dark:has-[:checked]:bg-indigo-950/50 text-slate-800 dark:text-slate-200">
+                        <input type="radio" name="kind" value="{{ $k }}" class="me-2 text-indigo-600 focus:ring-indigo-500" @checked(old('kind', 'incident') === $k) id="kind_{{ $k }}">{{ $l }}
                     </label>
                 @endforeach
             </div>
 
             {{-- Star Rating (shown only for reviews) --}}
             <div id="rating-section" class="hidden">
-                <label class="text-sm font-medium">{{ __('Your rating') }}</label>
+                <label class="text-sm font-medium text-slate-800 dark:text-slate-200">{{ __('Your rating') }}</label>
                 @php
                     $starDescriptions = [
                         1 => __('1 star - Poor'),
@@ -26,25 +26,25 @@
                 @endphp
                 <div class="flex items-center gap-1.5 mt-1" id="star-rating" role="group" aria-label="{{ __('Rating selection (1 to 5 stars)') }}">
                     @for ($i = 1; $i <= 5; $i++)
-                        <button type="button" data-star="{{ $i }}" class="star-btn text-3xl transition-transform hover:scale-110 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:ring-offset-2 rounded-md p-0.5 text-slate-300" aria-label="{{ $starDescriptions[$i] }}" aria-pressed="false">★</button>
+                        <button type="button" data-star="{{ $i }}" class="star-btn text-3xl transition-transform hover:scale-110 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:ring-offset-2 rounded-md p-0.5 text-slate-300 dark:text-slate-600" aria-label="{{ $starDescriptions[$i] }}" aria-pressed="false">★</button>
                     @endfor
                     <input type="hidden" name="rating" id="rating-input" value="{{ old('rating') }}">
-                    <span id="rating-label" class="ml-2 text-sm font-medium text-slate-700" aria-live="polite"></span>
+                    <span id="rating-label" class="ml-2 text-sm font-medium text-slate-700 dark:text-slate-300" aria-live="polite"></span>
                 </div>
-                @error('rating')<p class="text-sm text-red-600">{{ $message }}</p>@enderror
+                @error('rating')<p class="text-sm text-red-600 dark:text-red-400">{{ $message }}</p>@enderror
             </div>
 
             <div>
                 <div class="flex flex-wrap justify-between items-center gap-2">
-                    <label class="text-sm font-medium">{{ __('What happened? (Bangla, English or Banglish)') }}</label>
+                    <label class="text-sm font-medium text-slate-800 dark:text-slate-200">{{ __('What happened? (Bangla, English or Banglish)') }}</label>
                     {{-- Voice Dictation Button --}}
                     <div class="flex items-center gap-1.5">
-                        <select id="voice-lang" class="text-xs py-1 px-2 border-slate-300 rounded-md bg-slate-50 text-slate-700">
+                        <select id="voice-lang" class="text-xs py-1 px-2 border-slate-300 dark:border-slate-700 rounded-md bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300">
                             <option value="bn-BD">🇧🇩 বাংলা</option>
                             <option value="en-US">🇬🇧 English</option>
                         </select>
                         <button type="button" id="voice-btn" onclick="toggleVoiceDictation()"
-                            class="inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-md border border-red-300 bg-red-50 text-red-700 hover:bg-red-100 transition shadow-sm cursor-pointer select-none">
+                            class="inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-md border border-red-300 dark:border-red-800 bg-red-50 dark:bg-red-950/40 text-red-700 dark:text-red-300 hover:bg-red-100 transition shadow-sm cursor-pointer select-none">
                             <span id="voice-icon" class="text-sm">🎙️</span>
                             <span id="voice-label">{{ __('Speak (Voice)') }}</span>
                         </button>
@@ -52,61 +52,61 @@
                 </div>
 
                 {{-- Listening wave indicator --}}
-                <div id="voice-status" class="hidden text-xs text-red-600 font-semibold items-center gap-1.5 mt-1.5 p-2 bg-red-50/70 border border-red-200 rounded-md animate-pulse">
+                <div id="voice-status" class="hidden text-xs text-red-600 dark:text-red-400 font-semibold items-center gap-1.5 mt-1.5 p-2 bg-red-50/70 dark:bg-red-950/50 border border-red-200 dark:border-red-800 rounded-md animate-pulse">
                     <span class="inline-block w-2.5 h-2.5 rounded-full bg-red-600"></span>
                     <span id="voice-status-text">🔴 Listening... বলুন...</span>
                 </div>
 
-                <textarea name="body" rows="5" maxlength="500" id="body" class="mt-1 w-full border-slate-300 rounded-md text-sm" placeholder="রাত ১১টায় ধানমন্ডি ২৭ এর কাছে রাস্তায় আলো নেই, একজন ছিনতাই করার চেষ্টা করেছে...">{{ old('body') }}</textarea>
-                <div class="text-xs text-slate-500 text-right"><span id="count">0</span>/500</div>
-                @error('body')<p class="text-sm text-red-600">{{ $message }}</p>@enderror
+                <textarea name="body" rows="5" maxlength="500" id="body" class="mt-1 w-full border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 rounded-md text-sm" placeholder="রাত ১১টায় ধানমন্ডি ২৭ এর কাছে রাস্তায় আলো নেই, একজন ছিনতাই করার চেষ্টা করেছে...">{{ old('body') }}</textarea>
+                <div class="text-xs text-slate-500 dark:text-slate-400 text-right"><span id="count">0</span>/500</div>
+                @error('body')<p class="text-sm text-red-600 dark:text-red-400">{{ $message }}</p>@enderror
             </div>
 
             <div>
-                <label class="text-sm font-medium">{{ __('Venue (optional if you mark the place on the map)') }}</label>
-                <select name="venue_id" id="venue_id" class="mt-1 w-full border-slate-300 rounded-md text-sm">
+                <label class="text-sm font-medium text-slate-800 dark:text-slate-200">{{ __('Venue (optional if you mark the place on the map)') }}</label>
+                <select name="venue_id" id="venue_id" class="mt-1 w-full border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 rounded-md text-sm">
                     <option value="">{{ __('- none -') }}</option>
                     @foreach ($venues as $v)
                         <option value="{{ $v->id }}" data-lat="{{ $v->lat }}" data-lng="{{ $v->lng }}" @selected(old('venue_id', $selected) == $v->id)>{{ $v->name }} ({{ $v->area }})</option>
                     @endforeach
                 </select>
-                @error('venue_id')<p class="text-sm text-red-600">{{ $message }}</p>@enderror
+                @error('venue_id')<p class="text-sm text-red-600 dark:text-red-400">{{ $message }}</p>@enderror
             </div>
 
             <div>
-                <label class="text-sm font-medium">{{ __('Mark the place on the map (click)') }}</label>
-                <div id="map" style="height:260px" class="mt-1 rounded-lg border border-slate-300 z-0"></div>
+                <label class="text-sm font-medium text-slate-800 dark:text-slate-200">{{ __('Mark the place on the map (click)') }}</label>
+                <div id="map" style="height:260px" class="mt-1 rounded-lg border border-slate-300 dark:border-slate-700 z-0"></div>
                 <input type="hidden" name="lat" id="lat" value="{{ old('lat') }}">
                 <input type="hidden" name="lng" id="lng" value="{{ old('lng') }}">
             </div>
 
             {{-- Photo Evidence Upload --}}
             <div>
-                <label for="photo-input" class="text-sm font-medium cursor-pointer">📸 {{ __('Photo evidence (optional, up to 3)') }}</label>
-                <div id="photo-drop" class="mt-1 border-2 border-dashed border-slate-300 rounded-lg p-4 text-center cursor-pointer hover:border-indigo-400 hover:bg-indigo-50/30 transition-colors focus-within:border-indigo-500 focus-within:ring-2 focus-within:ring-indigo-500 focus-within:ring-offset-2 focus-within:bg-indigo-50/20">
+                <label for="photo-input" class="text-sm font-medium text-slate-800 dark:text-slate-200 cursor-pointer">📸 {{ __('Photo evidence (optional, up to 3)') }}</label>
+                <div id="photo-drop" class="mt-1 border-2 border-dashed border-slate-300 dark:border-slate-700 dark:bg-slate-800/40 rounded-lg p-4 text-center cursor-pointer hover:border-indigo-400 hover:bg-indigo-50/30 transition-colors focus-within:border-indigo-500 focus-within:ring-2 focus-within:ring-indigo-500 focus-within:ring-offset-2 focus-within:bg-indigo-50/20">
                     <input type="file" name="photos[]" id="photo-input" multiple accept="image/jpeg,image/png,image/webp" class="sr-only" max="3" aria-label="{{ __('Upload photo evidence, up to 3 photos in JPG, PNG or WebP format') }}">
-                    <div class="text-slate-500 text-sm">
+                    <div class="text-slate-500 dark:text-slate-400 text-sm">
                         <span class="text-2xl block mb-1">📷</span>
                         {{ __('Click or drag photos here') }}
-                        <span class="block text-xs text-slate-400 mt-1">{{ __('JPG, PNG or WebP · max 5 MB each · up to 3 photos') }}</span>
+                        <span class="block text-xs text-slate-400 dark:text-slate-500 mt-1">{{ __('JPG, PNG or WebP · max 5 MB each · up to 3 photos') }}</span>
                     </div>
                 </div>
                 <div id="photo-preview" class="flex gap-2 mt-2 flex-wrap"></div>
-                @error('photos')<p class="text-sm text-red-600">{{ $message }}</p>@enderror
-                @error('photos.*')<p class="text-sm text-red-600">{{ $message }}</p>@enderror
+                @error('photos')<p class="text-sm text-red-600 dark:text-red-400">{{ $message }}</p>@enderror
+                @error('photos.*')<p class="text-sm text-red-600 dark:text-red-400">{{ $message }}</p>@enderror
             </div>
 
             <div class="grid sm:grid-cols-2 gap-3">
                 <div>
-                    <label class="text-sm font-medium">{{ __('When did it happen?') }}</label>
-                    <input type="datetime-local" name="incident_time" max="{{ now()->format('Y-m-d\TH:i') }}" value="{{ old('incident_time', now()->format('Y-m-d\TH:i')) }}" class="mt-1 w-full border-slate-300 rounded-md text-sm">
-                    @error('incident_time')<p class="text-sm text-red-600">{{ $message }}</p>@enderror
+                    <label class="text-sm font-medium text-slate-800 dark:text-slate-200">{{ __('When did it happen?') }}</label>
+                    <input type="datetime-local" name="incident_time" max="{{ now()->format('Y-m-d\TH:i') }}" value="{{ old('incident_time', now()->format('Y-m-d\TH:i')) }}" class="mt-1 w-full border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 rounded-md text-sm">
+                    @error('incident_time')<p class="text-sm text-red-600 dark:text-red-400">{{ $message }}</p>@enderror
                 </div>
-                <label class="flex items-center gap-2 text-sm mt-6"><input type="checkbox" name="is_anonymous" value="1" class="rounded" @checked(old('is_anonymous'))> {{ __('Post anonymously (moderators can still see who sent it)') }}</label>
+                <label class="flex items-center gap-2 text-sm mt-6 text-slate-800 dark:text-slate-200"><input type="checkbox" name="is_anonymous" value="1" class="rounded border-slate-300 dark:border-slate-700 text-indigo-600 focus:ring-indigo-500" @checked(old('is_anonymous'))> {{ __('Post anonymously (moderators can still see who sent it)') }}</label>
             </div>
 
-            <p class="text-xs text-slate-500">{{ __('AI will read your report, classify it and check for duplicates. A moderator verifies it before it changes any safety score.') }}</p>
-            <button class="w-full bg-indigo-600 hover:bg-indigo-500 text-white rounded-md py-2.5 font-semibold">{{ __('Submit report') }}</button>
+            <p class="text-xs text-slate-500 dark:text-slate-400">{{ __('AI will read your report, classify it and check for duplicates. A moderator verifies it before it changes any safety score.') }}</p>
+            <button class="w-full bg-indigo-600 hover:bg-indigo-500 text-white rounded-md py-2.5 font-semibold transition">{{ __('Submit report') }}</button>
         </form>
     </div>
     @push('scripts')
@@ -155,9 +155,11 @@
                     const s = parseInt(btn.dataset.star);
                     btn.classList.toggle('text-amber-400', s <= n);
                     btn.classList.toggle('text-slate-300', s > n);
+                    btn.classList.toggle('dark:text-slate-600', s > n);
                     btn.setAttribute('aria-pressed', s <= n ? 'true' : 'false');
                 });
             }
+
             starBtns.forEach(btn => {
                 btn.addEventListener('click', () => setRating(parseInt(btn.dataset.star)));
                 btn.addEventListener('mouseenter', () => {
@@ -215,7 +217,7 @@
                     const div = document.createElement('div');
                     div.className = 'relative group';
                     const img = document.createElement('img');
-                    img.className = 'w-20 h-20 object-cover rounded-lg border border-slate-200';
+                    img.className = 'w-20 h-20 object-cover rounded-lg border border-slate-200 dark:border-slate-700';
                     img.src = URL.createObjectURL(f);
                     const btn = document.createElement('button');
                     btn.type = 'button';

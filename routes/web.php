@@ -3,6 +3,7 @@
 use App\Http\Controllers\Admin;
 use App\Http\Controllers\DarkSpotController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\DataPrivacyController;
 use App\Http\Controllers\DemoSimulatorController;
 use App\Http\Controllers\EmergencyContactController;
 use App\Http\Controllers\HealthController;
@@ -12,6 +13,7 @@ use App\Http\Controllers\Partner;
 use App\Http\Controllers\PlannerController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\ReportController;
+use App\Http\Controllers\ReportFlagController;
 use App\Http\Controllers\ReportPhotoController;
 use App\Http\Controllers\RouteController;
 use App\Http\Controllers\SafetyController;
@@ -60,6 +62,7 @@ Route::middleware(['auth', 'not_banned'])->group(function () {
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
+    Route::get('/profile/export', [DataPrivacyController::class, 'export'])->name('profile.export');
 
     Route::post('/age-confirm', [VenueController::class, 'confirmAge'])->name('age.confirm');
     Route::post('/venues/{venue}/favorite', [VenueController::class, 'toggleFavorite'])->whereNumber('venue')->name('venues.favorite');
@@ -71,6 +74,10 @@ Route::middleware(['auth', 'not_banned'])->group(function () {
     Route::get('/reports/create', [ReportController::class, 'create'])->name('reports.create');
     Route::post('/reports', [ReportController::class, 'store'])->middleware('throttle:10,1')->name('reports.store');
     Route::get('/my-reports', [ReportController::class, 'mine'])->name('reports.mine');
+    Route::get('/reports/{report}/edit', [ReportController::class, 'edit'])->whereNumber('report')->name('reports.edit');
+    Route::put('/reports/{report}', [ReportController::class, 'update'])->whereNumber('report')->name('reports.update');
+    Route::delete('/reports/{report}', [ReportController::class, 'destroy'])->whereNumber('report')->name('reports.destroy');
+    Route::post('/reports/{report}/flag', [ReportFlagController::class, 'store'])->whereNumber('report')->name('reports.flag');
     Route::post('/dark-spots', [DarkSpotController::class, 'store'])->middleware('throttle:10,1')->name('dark-spots.store');
 
     Route::get('/sos', [SafetyController::class, 'sosPage'])->name('sos.index');
@@ -99,6 +106,9 @@ Route::middleware(['auth', 'not_banned', 'role:venue_partner|super_admin'])->pre
     Route::get('/venues/{venue}/edit', [Partner\VenueController::class, 'edit'])->name('venues.edit');
     Route::put('/venues/{venue}', [Partner\VenueController::class, 'update'])->name('venues.update');
     Route::post('/venues/{venue}/coach', [Partner\VenueController::class, 'coach'])->name('venues.coach');
+
+    Route::get('/responses', [Partner\ReportResponseController::class, 'index'])->name('responses.index');
+    Route::post('/reports/{report}/responses', [Partner\ReportResponseController::class, 'store'])->whereNumber('report')->name('responses.store');
 });
 
 /* ---------- moderators ---------- */
@@ -112,6 +122,13 @@ Route::middleware(['auth', 'not_banned', 'role:safety_admin|super_admin'])->pref
     Route::post('/reports/{report}/verify', [Admin\ReportModerationController::class, 'verify'])->name('reports.verify');
     Route::post('/reports/{report}/reject', [Admin\ReportModerationController::class, 'reject'])->name('reports.reject');
     Route::post('/reports/{report}/analyze', [Admin\ReportModerationController::class, 'analyze'])->name('reports.analyze');
+
+    Route::post('/responses/{response}/approve', [Admin\ReportResponseModerationController::class, 'approve'])->name('responses.approve');
+    Route::post('/responses/{response}/reject', [Admin\ReportResponseModerationController::class, 'reject'])->name('responses.reject');
+
+    Route::get('/flags', [Admin\ReportFlagModerationController::class, 'index'])->name('flags.index');
+    Route::post('/flags/{flag}/dismiss', [Admin\ReportFlagModerationController::class, 'dismiss'])->name('flags.dismiss');
+    Route::post('/flags/{flag}/resolve', [Admin\ReportFlagModerationController::class, 'resolve'])->name('flags.resolve');
 });
 Route::middleware(['auth', 'not_banned', 'role:super_admin'])->prefix('admin')->name('admin.')->group(function () {
     Route::get('/users', [Admin\UserController::class, 'index'])->name('users');

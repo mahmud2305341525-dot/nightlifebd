@@ -74,11 +74,14 @@ class User extends Authenticatable
         return $this->hasAnyRole(['safety_admin', 'super_admin']);
     }
 
-    /** Reporter trust = (verified + 1) / (verified + rejected + 2). A new user starts at 0.5. */
+    /** Reporter trust = (verified + 1) / (verified + rejected + 2). A new user starts at 0.5. Bounded between 0.10 and 0.90. */
     public function recalcTrust(): void
     {
         $verified = $this->reports()->where('status', 'verified')->count();
         $rejected = $this->reports()->where('status', 'rejected')->count();
-        $this->forceFill(['trust_score' => round(($verified + 1) / ($verified + $rejected + 2), 2)])->save();
+        $rawTrust = ($verified + 1) / ($verified + $rejected + 2);
+        // Cap trust at 0.90 max and 0.10 min so no single actor gains disproportionate scoring hegemony
+        $cappedTrust = round(min(0.90, max(0.10, $rawTrust)), 2);
+        $this->forceFill(['trust_score' => $cappedTrust])->save();
     }
 }

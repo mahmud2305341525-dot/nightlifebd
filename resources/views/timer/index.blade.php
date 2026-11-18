@@ -1,22 +1,22 @@
 <x-app-layout>
     <x-slot name="header">
-        <h1 class="font-extrabold text-xl flex items-center gap-2">⏱️ {{ __('Walk With Me — Safety Timer') }}</h1>
-        <p class="text-sm text-slate-500 mt-1">{{ __('Set a countdown. If you don\'t tap "I am safe" in time, your emergency contacts are alerted automatically.') }}</p>
+        <h1 class="font-extrabold text-xl flex items-center gap-2 text-slate-800 dark:text-slate-100">⏱️ {{ __('Walk With Me — Safety Timer') }}</h1>
+        <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">{{ __('Set a countdown. If you don\'t tap "I am safe" in time, your emergency contacts are alerted automatically.') }}</p>
     </x-slot>
 
     <div class="max-w-2xl mx-auto p-4 space-y-5">
 
         @unless ($hasContacts)
-            <div class="rounded-xl bg-amber-50 border border-amber-300 p-4 text-sm text-amber-900 flex gap-3 items-center">
+            <div class="rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-800 p-4 text-sm text-amber-900 dark:text-amber-200 flex gap-3 items-center">
                 ⚠️ {{ __('Add an emergency contact first so the timer can alert someone.') }}
-                <a class="underline font-semibold ml-1" href="{{ route('contacts.index') }}">{{ __('Add contacts') }}</a>
+                <a class="underline font-semibold ml-1 text-amber-700 dark:text-amber-400" href="{{ route('contacts.index') }}">{{ __('Add contacts') }}</a>
             </div>
         @endunless
 
         {{-- Live Countdown Widget --}}
         @php $running = $timers->firstWhere(fn($t) => $t->status() === 'running'); @endphp
         @if ($running)
-            <div id="wwm-widget" class="bg-gradient-to-br from-slate-900 to-slate-800 text-white rounded-2xl shadow-xl p-6 space-y-4">
+            <div id="wwm-widget" class="bg-gradient-to-br from-slate-900 to-slate-800 text-white rounded-2xl shadow-xl p-6 space-y-4 border border-slate-700">
                 <div class="flex justify-between items-start">
                     <div>
                         <div class="text-xs uppercase tracking-widest text-slate-400 mb-1">{{ __('Walk With Me — Active') }}</div>
@@ -58,29 +58,29 @@
         @endif
 
         {{-- Start New Timer --}}
-        <div class="bg-white rounded-xl shadow-sm p-5">
-            <h2 class="font-bold mb-3">⚙️ {{ __('Start a new timer') }}</h2>
+        <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-sm p-5">
+            <h2 class="font-bold mb-3 text-slate-900 dark:text-slate-100">⚙️ {{ __('Start a new timer') }}</h2>
             <form method="POST" action="{{ route('timer.store') }}" class="space-y-3 text-sm">
                 @csrf
                 <div>
-                    <div class="text-xs font-semibold text-slate-500 mb-1.5 uppercase tracking-wide">{{ __('Quick presets') }}</div>
+                    <div class="text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1.5 uppercase tracking-wide">{{ __('Quick presets') }}</div>
                     <div class="grid grid-cols-4 gap-2">
                         @foreach ([10 => '10 min', 20 => '20 min', 30 => '30 min', 60 => '1 hr'] as $m => $label)
                             <button type="button" data-m="{{ $m }}"
-                                class="quick border border-slate-200 hover:bg-indigo-50 hover:border-indigo-400 rounded-lg py-2 text-center font-semibold transition-all text-xs">
+                                class="quick border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 hover:bg-indigo-50 dark:hover:bg-indigo-950/60 hover:border-indigo-400 rounded-lg py-2 text-center font-semibold transition-all text-xs">
                                 +{{ $label }}
                             </button>
                         @endforeach
                     </div>
                 </div>
 
-                <label class="block font-semibold">{{ __('I will arrive safely by') }}
+                <label class="block font-semibold text-slate-800 dark:text-slate-200">{{ __('I will arrive safely by') }}
                     <input type="datetime-local" id="due_at" name="due_at" value="{{ old('due_at') }}"
-                        class="mt-1 w-full border-slate-300 rounded-lg focus:ring-indigo-400" required>
+                        class="mt-1 w-full border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 rounded-lg focus:ring-indigo-400" required>
                 </label>
 
                 <input name="note" maxlength="120" placeholder="{{ __('e.g. Going home from Gulshan 2 by CNG') }}"
-                    value="{{ old('note') }}" class="w-full border-slate-300 rounded-lg focus:ring-indigo-400">
+                    value="{{ old('note') }}" class="w-full border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 rounded-lg focus:ring-indigo-400">
 
                 <x-input-error :messages="$errors->all()" />
                 <button type="submit"
@@ -91,8 +91,8 @@
         </div>
 
         {{-- How it works --}}
-        <div class="bg-gradient-to-br from-indigo-50 to-blue-50 rounded-xl border border-indigo-100 p-5">
-            <h2 class="font-bold mb-3 text-indigo-900">{{ __('How it works') }}</h2>
+        <div class="bg-gradient-to-br from-indigo-50 to-blue-50 dark:from-indigo-950/40 dark:to-blue-950/30 rounded-xl border border-indigo-100 dark:border-indigo-800/60 p-5">
+            <h2 class="font-bold mb-3 text-indigo-900 dark:text-indigo-200">{{ __('How it works') }}</h2>
             <div class="space-y-3">
                 @foreach ([
                     ['1', 'bg-indigo-600', __('Set a deadline'), __('Pick when you expect to arrive home or at your destination.')],
@@ -103,8 +103,8 @@
                     <div class="flex gap-3 items-start">
                         <span class="flex-shrink-0 w-7 h-7 {{ $cls }} text-white rounded-full flex items-center justify-center text-sm font-bold shadow-sm">{{ $num }}</span>
                         <div>
-                            <div class="font-semibold text-sm text-slate-800">{{ $title }}</div>
-                            <div class="text-xs text-slate-600 mt-0.5">{{ $desc }}</div>
+                            <div class="font-semibold text-sm text-slate-800 dark:text-slate-100">{{ $title }}</div>
+                            <div class="text-xs text-slate-600 dark:text-slate-300 mt-0.5">{{ $desc }}</div>
                         </div>
                     </div>
                 @endforeach
@@ -113,22 +113,22 @@
 
         {{-- Past timers --}}
         @if ($timers->isNotEmpty())
-        <div class="bg-white rounded-xl shadow-sm p-4">
-            <h2 class="font-bold mb-3 text-sm">{{ __('Recent timers') }}</h2>
+        <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-sm p-4">
+            <h2 class="font-bold mb-3 text-sm text-slate-900 dark:text-slate-100">{{ __('Recent timers') }}</h2>
             <div class="space-y-2">
                 @foreach ($timers as $t)
                     @php $st = $t->status(); @endphp
-                    <div class="flex justify-between items-center py-2 border-b last:border-0 text-sm gap-3">
+                    <div class="flex justify-between items-center py-2 border-b border-slate-100 dark:border-slate-800 last:border-0 text-sm gap-3 text-slate-800 dark:text-slate-200">
                         <div class="min-w-0">
                             <div class="font-semibold truncate">{{ $t->due_at->format('d M, h:i A') }}
                                 <span class="text-xs px-2 py-0.5 rounded-full font-medium {{
-                                    ['running' => 'bg-blue-100 text-blue-800',
-                                     'overdue' => 'bg-amber-100 text-amber-800',
-                                     'alerted' => 'bg-red-100 text-red-800',
-                                     'confirmed' => 'bg-green-100 text-green-800'][$st]
+                                    ['running' => 'bg-blue-100 dark:bg-blue-950/60 text-blue-800 dark:text-blue-300',
+                                     'overdue' => 'bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300',
+                                     'alerted' => 'bg-red-100 dark:bg-red-950/60 text-red-800 dark:text-red-300',
+                                     'confirmed' => 'bg-green-100 dark:bg-green-950/60 text-green-800 dark:text-green-300'][$st]
                                 }}">{{ __($st) }}</span>
                             </div>
-                            @if ($t->note)<div class="text-xs text-slate-500 truncate">{{ $t->note }}</div>@endif
+                            @if ($t->note)<div class="text-xs text-slate-500 dark:text-slate-400 truncate">{{ $t->note }}</div>@endif
                         </div>
                         <div class="flex-shrink-0">
                             @if (in_array($st, ['running', 'overdue']))
@@ -137,7 +137,7 @@
                                 </form>
                             @else
                                 <form method="POST" action="{{ route('timer.destroy', $t) }}">@csrf @method('DELETE')
-                                    <button class="text-xs text-slate-400 hover:text-red-500 underline">{{ __('Remove') }}</button>
+                                    <button class="text-xs text-slate-400 hover:text-red-500 dark:hover:text-red-400 underline">{{ __('Remove') }}</button>
                                 </form>
                             @endif
                         </div>
@@ -148,17 +148,17 @@
         @endif
 
         <div class="grid grid-cols-2 gap-3">
-            <a href="{{ route('trips.index') }}" class="bg-white rounded-xl shadow-sm p-3 text-center hover:shadow-md transition text-sm">
+            <a href="{{ route('trips.index') }}" class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-sm p-3 text-center hover:shadow-md transition text-sm text-slate-800 dark:text-slate-200 block">
                 <div class="text-2xl mb-1">📍</div><div class="font-semibold">{{ __('Live trip') }}</div>
-                <div class="text-xs text-slate-500">{{ __('Share GPS with contacts') }}</div>
+                <div class="text-xs text-slate-500 dark:text-slate-400">{{ __('Share GPS with contacts') }}</div>
             </a>
-            <a href="{{ route('sos.index') }}" class="bg-red-50 rounded-xl shadow-sm border border-red-100 p-3 text-center hover:shadow-md transition text-sm">
-                <div class="text-2xl mb-1">🆘</div><div class="font-semibold text-red-700">{{ __('SOS') }}</div>
-                <div class="text-xs text-red-400">{{ __('Alert contacts now') }}</div>
+            <a href="{{ route('sos.index') }}" class="bg-red-50 dark:bg-red-950/40 rounded-xl shadow-sm border border-red-100 dark:border-red-900/60 p-3 text-center hover:shadow-md transition text-sm block">
+                <div class="text-2xl mb-1">🆘</div><div class="font-semibold text-red-700 dark:text-red-300">{{ __('SOS') }}</div>
+                <div class="text-xs text-red-400 dark:text-red-300/80">{{ __('Alert contacts now') }}</div>
             </a>
         </div>
 
-        <p class="text-xs text-slate-400 text-center">{{ __('Alerts are checked every minute by the scheduler (php artisan schedule:work).') }}</p>
+        <p class="text-xs text-slate-400 dark:text-slate-500 text-center">{{ __('Alerts are checked every minute by the scheduler (php artisan schedule:work).') }}</p>
     </div>
 
     @push('scripts')

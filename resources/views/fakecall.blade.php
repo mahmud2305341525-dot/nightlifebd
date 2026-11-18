@@ -1,19 +1,19 @@
 <x-app-layout>
     <div class="max-w-md mx-auto p-4 space-y-3 text-sm">
-        <div class="rounded-xl bg-amber-50 border border-amber-300 p-3.5 text-xs text-amber-900 space-y-1">
-            <div class="font-bold flex items-center gap-1.5 text-amber-950 text-sm">
+        <div class="rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-800 p-3.5 text-xs text-amber-900 dark:text-amber-200 space-y-1">
+            <div class="font-bold flex items-center gap-1.5 text-amber-950 dark:text-amber-200 text-sm">
                 <span>⚠️</span> <span>{{ __('Simulated Call Only') }}</span>
             </div>
             <p>{{ __('This tool produces an audio ring and visual call screen on this device to help you exit uncomfortable situations politely. It DOES NOT dial real phone networks, does not contact 999, and does not notify emergency contacts. In an actual emergency, call 999 immediately.') }}</p>
         </div>
 
-        <h1 class="text-xl font-bold">📞 {{ __('Fake incoming call') }}</h1>
-        <p class="text-slate-600">{{ __('Use it to leave an uncomfortable situation politely. Choose a caller name and a delay, then lock the screen as if it is a normal call.') }}</p>
-        <input id="caller" value="Ammu" class="w-full border-slate-300 rounded-md" placeholder="{{ __('Caller name') }}">
-        <select id="delay" class="w-full border-slate-300 rounded-md">
+        <h1 class="text-xl font-bold text-slate-800 dark:text-slate-100">📞 {{ __('Fake incoming call') }}</h1>
+        <p class="text-slate-600 dark:text-slate-400">{{ __('Use it to leave an uncomfortable situation politely. Choose a caller name and a delay, then lock the screen as if it is a normal call.') }}</p>
+        <input id="caller" value="Ammu" class="w-full border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 rounded-md" placeholder="{{ __('Caller name') }}">
+        <select id="delay" class="w-full border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 rounded-md">
             <option value="0">{{ __('Ring now') }}</option><option value="10">{{ __('In 10 seconds') }}</option><option value="30">{{ __('In 30 seconds') }}</option><option value="60">{{ __('In 1 minute') }}</option>
         </select>
-        <button id="start" class="w-full bg-slate-900 text-white rounded-md py-2.5 font-semibold">{{ __('Start') }}</button>
+        <button id="start" class="w-full bg-slate-900 dark:bg-indigo-600 hover:bg-slate-800 dark:hover:bg-indigo-500 text-white rounded-md py-2.5 font-semibold transition">{{ __('Start') }}</button>
     </div>
 
     <div id="call" class="hidden fixed inset-0 z-[70] bg-slate-900 text-white flex flex-col items-center justify-between py-16">
