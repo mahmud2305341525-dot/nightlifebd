@@ -1,0 +1,100 @@
+name: CI Pipeline
+
+on:
+  push:
+    branches: [ main, master, 'feature/**', 'release/**' ]
+  pull_request:
+    branches: [ main, master ]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality-gate:
+    name: Code Quality & Automated Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    env:
+      APP_ENV: testing
+      DB_CONNECTION: sqlite
+      DB_DATABASE: ":memory:"
+      BCRYPT_ROUNDS: 4
+      CACHE_STORE: array
+      SESSION_DRIVER: array
+      QUEUE_CONNECTION: sync
+      MAIL_MAILER: array
+      NIGHTLIFE_DEMO_ENABLED: false
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup PHP 8.2 runtime
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          extensions: mbstring, dom, fileinfo, sqlite3, pdo_sqlite, gd, exif, curl, xml, zip
+          coverage: none
+          tools: composer:v2
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Validate composer configuration
+        run: composer validate --strict
+
+      - name: Get Composer Cache Directory
+        id: composer-cache
+        run: echo "dir=$(composer config cache-files-dir)" >> $GITHUB_OUTPUT
+
+      - name: Cache Composer dependencies
+        uses: actions/cache@v4
+        with:
+          path: ${{ steps.composer-cache.outputs.dir }}
+          key: ${{ runner.os }}-composer-${{ hashFiles('**/composer.lock') }}
+          restore-keys: ${{ runner.os }}-composer-
+
+      - name: Install Composer dependencies
+        run: composer install --prefer-dist --no-progress --no-interaction --optimize-autoloader
+
+      - name: Install NPM dependencies
+        run: npm ci
+
+      - name: Prepare test environment
+        run: |
+          cp .env.example .env
+          php artisan key:generate --ansi
+
+      - name: Run code formatting check (Pint)
+        run: composer lint
+
+      - name: Run Blade view syntax compilation check
+        run: |
+          php artisan view:cache
+          php artisan view:clear
+
+      - name: Build frontend assets (Vite)
+        run: npm run build
+
+      - name: Verify database migrations integrity
+        run: |
+          touch database/database.sqlite
+          php artisan migrate --force --database=sqlite
+
+      - name: Execute PHPUnit Unit Testsuite
+        run: composer test:unit
+
+      - name: Execute PHPUnit Feature Testsuite
+        run: composer test:feature
+
+      - name: Execute PHPUnit Smoke Testsuite (User Journeys)
+        run: composer test:smoke
+
+      - name: Run AI Classification Evaluation Gate
+        run: php artisan ai:evaluate
+

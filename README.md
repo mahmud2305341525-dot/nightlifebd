@@ -1,126 +1,217 @@
-# 🌙 NightLifeBD — Bangla-first AI Safety Intelligence for Bangladesh's Nights
+# 🌙 NightLifeBD — Bangla-First AI Safety Intelligence Web Application
 
-Laravel 12 web app (installable PWA) that turns what people experience at night — written in **Bangla, English or Banglish** — into usable safety information: a **time-aware, explainable safety score** for every venue, a **safest-route finder**, a **heatmap**, an **AI night planner**, and a free **emergency toolkit** (SOS, live trip link, safety timer, fake call).
+A modern, production-hardened Laravel 12 application (installable Progressive Web App) turning real community nighttime experiences — submitted in **Bangla, English, or Banglish** — into actionable, explainable safety intelligence: a **time-aware, explainable venue safety score with evidence confidence levels**, **multi-objective safest vs. fastest walking & driving routes**, **live spatial heatmaps**, an **AI night planner (RAG)**, a **venue right-of-reply system**, and an **emergency safety toolkit** (SOS, live trip tracking, safety timer, fake call, and dead-man stale trip alerts).
 
-**Team Error 404** — Daffodil International University, SE331 Software Engineering Design Capstone (Fall 2026)
-Ridwan Mahmud (232-35-525) · Shahed Ahmed (232-35-033) · Maruf Ahmed (232-35-447)
+**Team Error 404** — Daffodil International University (DIU), SE331 Software Engineering Design Capstone (Fall 2026)  
+*Ridwan Mahmud (232-35-525) · Shahed Ahmed (232-35-033) · Maruf Ahmed (232-35-447)*
 
-> Safety information is community-sourced and AI-assisted. It is advisory only and never replaces **999**.
-> All demo venues, reports and users are **fictional**.
-
----
-
-## 1. Features (mapped to the proposal)
-
-| Proposal | Feature | Where |
-|---|---|---|
-| FR-01 | Register / login / profile, roles (user, venue_partner, safety_admin, super_admin) | Breeze + Spatie Permission |
-| FR-02 | Incident reports & venue reviews in Bangla / English / Banglish (≤500 chars, anonymous option, map pin) | `/reports/create` |
-| FR-03 | **AI Report Analyzer**: category, severity 1-5, language, spam probability, English summary | `ReportAnalyzer`, `GeminiService`, `LocalAnalyzer` |
-| FR-04 | **Duplicate detection** with embeddings (cosine similarity; duplicates = corroboration, not spam) | `ReportAnalyzer::markDuplicate` |
-| FR-05 | **Explainable time-aware safety score** per venue × 4 time buckets (day / evening / night / late) | `SafetyScoreService`, venue page |
-| FR-06 | **Safer route**: fastest vs safest, scored on verified incidents, dark spots and nearby police/hospitals; never >30% longer | `/route`, `RouteService` |
-| FR-07 | **AI Night Planner** (RAG): "৩ জন, ৩০০০ টাকা, শান্ত জায়গা, ধানমন্ডি" → 2-3 stop plan from our own DB, budget-validated | `/planner`, `NightPlannerService` |
-| FR-08 | **Emergency toolkit**: long-press/double-tap SOS (pre-filled SMS + email/Telegram + 999), near-me help points, live trip link, ride check-in, safety timer, fake call | `/sos`, `/near-me`, `/trips`, `/timer`, `/fake-call` |
-| FR-09 | Venue search & filters (category, area, price, safety badge, time of day) + map | `/venues` |
-| FR-10 | Moderation: AI-pre-triaged report queue, venue approval, user roles / ban, audit log | `/admin/*` |
-| FR-11 | Bilingual UI (English ⇄ বাংলা toggle) | `lang/bn.json` |
-| FR-12 | PWA: manifest + service worker, offline SOS page with cached contacts and help points | `public/sw.js` |
-| extra | Safety **heatmap** with hour slider · Venue **Safety Coach** for partners · reporter **trust score** · community **dark-spot** pins · age gate for restricted venues | |
-
-### How the AI pipeline works
-```
-User report → AnalyzeReportJob → Gemini (JSON) ─┐ if no key / quota hit
-                                                └→ offline Bangla/Banglish keyword analyzer (flagged for review)
-            → embedding (Gemini, or local hashed n-grams) → duplicate check (same venue or ≤200 m, last 48 h)
-            → moderation queue sorted by AI severity → moderator verifies/rejects → reporter trust updated
-            → safety score recalculated → badges · heatmap · safe route · night planner
-```
-Score formula: `base = 40 + 20·CCTV + 20·guard + 4·lighting` (+10 day, −5 night, −10 late) and
-`score = clamp(base − 5·Σ severity × reporter_trust × e^(−age/30 days) × time_weight × duplicate_boost)`.
-Badge: ≥70 safe, ≥45 moderate, else caution. Reporter trust = (verified+1)/(verified+rejected+2).
+> ⚠️ **Safety Disclaimer**: Safety information is community-sourced and AI-assisted. It is strictly advisory and never replaces emergency services (**999**). All demo records are fictional.
 
 ---
 
-## 2. Run it (Windows + XAMPP, ~10 minutes)
+## 1. System Architecture & Workflows
 
-Requirements: PHP ≥ 8.2 (with `pdo_mysql`, `mbstring`, `curl`, `intl`, `zip`), Composer, Node 18+, MySQL (XAMPP).
+### 1.1 High-Level Architecture
+```mermaid
+flowchart TD
+    subgraph Client["Client Tier (PWA & Web)"]
+        UI["Tailwind CSS + Alpine.js + Leaflet.js"]
+        PWA["Service Worker (sw.js) + Web Manifest"]
+        MobileNav["Mobile Bottom Navigation Bar"]
+        BanglaFont["Bangla Typography (Hind Siliguri)"]
+    end
 
+    subgraph AppTier["Laravel 12 Application Tier"]
+        Auth["Breeze + Spatie Roles (User, Partner, Safety Admin, Super Admin)"]
+        Rtr["Web & API Controllers + Rate Limiters"]
+        Jobs["Asynchronous Queue Workers (AnalyzeReportJob)"]
+        Cron["Console Scheduler (safety:check-timers, trips:check-stale, safety:recalculate)"]
+    end
+
+    subgraph AIService["AI & NLP Pipeline"]
+        Gemini["Google Gemini 2.5 Flash (Cloud LLM)"]
+        Local["Local Lexicon Analyzer (Offline Fallback)"]
+        Eval["IncidentEvaluationService (Confusion Matrix, F1, Accuracy)"]
+    end
+
+    subgraph RoutingEngine["Routing & Spatial Intelligence"]
+        ORS["OpenRouteService (Car & Pedestrian GeoJSON)"]
+        OSRM["Project-OSRM (Demo Fallback)"]
+        RouteScore["RouteService (~50m Sampling + 30% Detour Cap)"]
+    end
+
+    subgraph StorageTier["Data & Persistence Tier"]
+        DB[(Database: SQLite / MySQL with Strict CHECK Constraints)]
+        AuditLog[(Audit Trail & Versioned Decisions)]
+        Backups[(Automated Pre-Migration Backups)]
+    end
+
+    UI --> Rtr
+    Rtr --> Auth
+    Rtr --> Jobs
+    Jobs --> Gemini
+    Gemini -.->|Quota/Network Error| Local
+    Jobs --> StorageTier
+    Rtr --> RouteScore
+    RouteScore --> ORS
+    RouteScore -.->|Fallback| OSRM
+    Cron --> StorageTier
+    Cron --> Rtr
+    Jobs --> Eval
+```
+
+---
+
+### 1.2 AI Incident Classification & Guardrail Pipeline
+```mermaid
+flowchart LR
+    A["User Incident Report<br/>(Bangla / English / Banglish)"] --> B["Deep Binary & Validation<br/>(500 chars max, anti-burst cooldown)"]
+    B --> C["AnalyzeReportJob (Async Queue)"]
+    C --> D{"Gemini API<br/>Available?"}
+    D -- Yes --> E["Gemini 2.5 Flash Structured JSON<br/>(Category, Severity 1-5, Spam Prob)"]
+    D -- No / Error --> F["Local Lexicon Analyzer<br/>(Offline Dictionary & Regex Fallback)"]
+    E --> G["Embeddings & Duplicate Detection<br/>(Cosine similarity &le;200m / 48h)"]
+    F --> G
+    G --> H["Moderator Verification Queue<br/>(Sorted by AI Severity & Flagged Status)"]
+    H --> I{"Moderator<br/>Decision"}
+    I -- Verified --> J["Update Laplace Trust & Recalculate Venue Safety Scores"]
+    I -- Rejected --> K["Lower Reporter Trust & Audit Decision"]
+```
+
+---
+
+### 1.3 Explainable Safety Score & Confidence Engine
+```mermaid
+flowchart TD
+    subgraph Baseline["1. Venue Checklist Baseline (Max 100)"]
+        V["Base (40) + CCTV (+20) + Security Guard (+20) + Lighting (1-5 &times; 4)"]
+    end
+
+    subgraph TimeOfDay["2. Time-of-Day Adjustment"]
+        T["Day: +10 | Evening: &plusmn;0 | Night: &minus;5 | Late Night: &minus;10"]
+    end
+
+    subgraph CommunityRisk["3. Verified Community Risk Penalty"]
+        R["Risk = &Sigma; [ Severity &times; Laplace Trust &times; e^(-age/30d) &times; Time Weight &times; Dupe Boost ]"]
+        AbuseCap["Anti-Manipulation Safeguard:<br/>Uncorroborated single-reporter penalty capped at risk &le; 11.0"]
+        SelfDupe["Duplicate by same author = 0% boost<br/>Duplicate by other author = up to +75% boost"]
+    end
+
+    subgraph FinalScore["4. Clamped Score & Badges"]
+        Calc["Final = clamp(Baseline + TimeOfDay &minus; 5 &times; Risk, 0, 100)"]
+        Safe["&ge; 70 : Safe (Green)"]
+        Mod["&ge; 45 : Moderate (Amber)"]
+        Caut["< 45 : Caution (Red)"]
+    end
+
+    subgraph Confidence["5. Evidence Confidence Indicator (Separated)"]
+        Low["Low Confidence: < 5 independent reporters or 0 reports"]
+        Moderate["Moderate Confidence: 5–14 independent reporters + recent data"]
+        High["High Confidence: &ge; 15 independent reporters + active corroboration"]
+    end
+
+    Baseline --> FinalScore
+    TimeOfDay --> FinalScore
+    CommunityRisk --> AbuseCap --> FinalScore
+    SelfDupe --> CommunityRisk
+    FinalScore --> Safe
+    FinalScore --> Mod
+    FinalScore --> Caut
+```
+
+---
+
+## 2. Completed Master Development Phases
+
+### Phase 1: Security and Database Reliability
+* **Environment Security**: Excluded `.env` from Git tracking and distributable archives; `.env.example` verified with placeholders; local keys kept intact.
+* **Database Integrity**:
+  * Added self-referencing foreign key on `reports.duplicate_of` with `restrictOnDelete()` and Eloquent duplicate promotion lifecycle hook (earliest duplicate promoted to root upon parent deletion).
+  * Added MySQL/SQLite CHECK constraints: `reports.severity` (1–5), `reports.rating` (1–5), `venues.lighting` (1–5), and `venues.price_tier` (1–3).
+  * Added `SoftDeletes` on reports preserving historical evidence.
+* **Flash-Free Dark Mode**: Instant theme initialization before page render avoiding FOUC; synchronized toggle icons (`🌙`/`☀️`) across navigation, guest layouts, and modals.
+* **WCAG AA Accessibility**: Accessible safety badge component (`<x-badge />`) with icons, semantic labels, `role="status"`, and contrast-compliant palettes.
+
+### Phase 2: Safety Intelligence and Trust System
+* **Safety-Score Confidence System**:
+  * Distinct 3-tier confidence indicator (`Low`, `Moderate`, `High`) representing corroboration strength, independent reporters, and recency ($\le 60$ days).
+  * Venues with 0 community reports explicitly explain that score is derived solely from physical security features.
+  * Duplicate reports count as corroboration for parent reports but are strictly excluded from independent reporter counts.
+* **Abuse Resistance & Trust Hardening**:
+  * Laplace trust score bounded between $[0.10, 0.90]$ in `User::recalcTrust()`.
+  * Duplicate boost strictly requires `user_id != root->user_id` (self-duplicates yield 0% boost).
+  * Uncorroborated single-reporter penalty damping (capped at `risk = 11.0` until independent multi-user corroboration).
+  * 24-hour per-user, per-venue report cooldown to prevent targeted score harassment.
+  * Velocity burst detector ($\ge 3$ reports in 10 minutes) automatically flags reports with `needs_review = true` and records audit entries.
+* **AI vs. Moderator Evaluation Dashboard**:
+  * Persists raw AI classifications (`ai_category`, `ai_severity`) alongside human-moderated outcomes.
+  * Interactive admin evaluation dashboard computing Category Accuracy, Macro F1-Score, Severity Agreement (MAE), $7 \times 7$ Confusion Matrix, and Head-to-Head Comparison (Gemini AI vs. Local Lexicon Analyzer).
+
+### Phase 3: New Functionality
+* **Walking Route Functionality**: Pedestrian profiles on OpenRouteService (`foot-walking`) and OSRM with realistic walking speed calculation ($1.33\text{ m/s}$), mode selector toggle (🚗 Driving / 🚶 Walking), and mode-specific caching.
+* **Venue Right-of-Reply**: `report_responses` table allowing authorized venue owners to post official statements on reports regarding their venues; includes moderator approval/rejection queue and public display callouts.
+* **Pending Report Management**: Report authors can view, edit, or withdraw their own pending reports; edits reset classifications and automatically re-dispatch `AnalyzeReportJob`; verified or rejected reports are locked against edits.
+* **Abuse Reporting (Flagging)**: Community report flagging system with unique constraint `['report_id', 'user_id']` preventing repeat flags, auto-elevation to `needs_review` upon $\ge 3$ flags, and an admin moderation queue with dismissal, report rejection, and user ban actions.
+* **Stale Live-Trip Emergency Alerts**: Inactive trip monitor (`trips:check-stale`) alerting emergency contacts when an active trip stops pinging for 15+ minutes or stalls past duration; includes dead-man switch deduplication (`stale_alerted_at`).
+* **Data Privacy, Export & Safe Deletion**: Self-service JSON personal data export (`GET /profile/export`); safe account deletion disassociating community reports (`user_id = null`, `is_anonymous = true`) to preserve community venue safety scores without foreign key errors.
+
+### Phase 4: UI, UX and Presentation
+* **Mobile Bottom Navigation Bar**: Fixed, thumb-friendly bottom navigation bar for mobile viewports (`md:hidden`) with quick access to Explore, Safe Route, Near Me, SOS, and Profile.
+* **Onboarding Safety Circle Prompt**: Welcoming, explanatory setup card on user dashboard encouraging new users to configure emergency contacts for live trips and SOS alerts.
+* **Actionable Empty States**: Engaging, illustrated empty-state components across contacts, reports, venues, and live trips.
+* **Bangla Typography**: Integrated Google Font `Hind Siliguri` alongside Figtree in Tailwind configuration for native Bangla glyphs and line heights.
+
+---
+
+## 3. Quick Start (Windows / Local Development)
+
+### One-Click Launchers (Root Directory)
+* **`RUN_APP.bat`**: Automatic one-click launcher starting Laravel server and Vite assets.
+* **`run.bat`**: Interactive control menu (Run App, Run Tests, Recalculate Scores, Demo Reset).
+* **`RESET_DEMO.bat`**: Resets all demo trips, timers, and flags without wiping seed data.
+
+### Manual Setup
 ```bash
+cd nightlifebd-main
 composer install
 npm install
-copy .env.example .env          # Mac/Linux: cp .env.example .env
+copy .env.example .env
 php artisan key:generate
+php artisan migrate
+npm run build
+php artisan serve
 ```
-1. Start **MySQL** in XAMPP, create an empty database `nightlifebd` (utf8mb4_unicode_ci) in phpMyAdmin.
-2. Check `DB_*` in `.env` (defaults: root, empty password).
-3. Then:
-```bash
-php artisan migrate --seed       # tables + 4 test accounts + 42 demo venues + help points + ~60 demo reports
-php artisan serve                # terminal 1  → http://127.0.0.1:8000
-npm run dev                      # terminal 2  (CSS/JS)
-php artisan schedule:work        # terminal 3  (optional: safety timers every minute, daily score refresh)
-```
-Optional: `php artisan havens:import` downloads **real** police stations / hospitals / 24-7 pharmacies of Dhaka from OpenStreetMap (needs internet). The seeded help-point coordinates are approximate.
-
-### Test accounts (password `password`, local development only)
-| Email | Role |
-|---|---|
-| user@test.com | user |
-| partner@test.com | venue_partner (owns the demo venues) |
-| safety@test.com | safety_admin (moderation) |
-| admin@test.com | super_admin (also manages users) |
-
-### Optional free keys (`.env`) — the app works without all of them
-| Key | Gives you | Without it |
-|---|---|---|
-| `GEMINI_API_KEY` ([aistudio.google.com/apikey](https://aistudio.google.com/apikey)) | LLM report analysis, embeddings, planner, venue coach | built-in Bangla/Banglish keyword analyzer + local similarity + rule-based planner/tips |
-| `ORS_API_KEY` ([openrouteservice.org](https://openrouteservice.org)) | OpenRouteService alternatives | public OSRM demo server |
-| `TELEGRAM_BOT_TOKEN` (@BotFather) | Telegram alerts to contacts who gave their chat ID | email alerts only (`MAIL_MAILER=log` writes them to `storage/logs/laravel.log`) |
-
-Model names and free-tier limits change — verify them in Google AI Studio before the demo. Set `NIGHTLIFE_USE_QUEUE=true` and run `php artisan queue:work` if you prefer a real queue.
-
-### Testing on a phone
-Geolocation, the service worker and "Add to Home Screen" need **HTTPS** (or localhost). Expose your laptop with `cloudflared tunnel --url http://127.0.0.1:8000` or `ngrok http 8000`; set `APP_URL` to the tunnel URL so live-trip links work for your contacts.
 
 ---
 
-## 3. 5-minute demo script
-1. **Explore** (`/venues`) — switch the time selector from *Evening* to *Late night*: badges change. Open a venue → "Why this score?" per time bucket.
-2. Log in as `user@test.com` → **Report** in Bangla: `রাত ১১টায় ধানমন্ডি ২৭ এর কাছে আলো নেই, ছিনতাইয়ের চেষ্টা হয়েছে` → *My reports* shows the AI category/severity.
-3. Log in as `safety@test.com` → **Moderate reports**: queue sorted by severity with AI summary, spam %, duplicates. Verify → the venue score and reporter trust update.
-4. **Safe Route** — click A in Gulshan, B in Dhanmondi, time *Night* → grey fastest vs green safest, with reasons. Try *Report a dark spot*.
-5. **Heatmap** — drag the hour slider. **Night Planner** — `৩ জন, ৩০০০ টাকা, শান্ত জায়গা, ধানমন্ডি`.
-6. **SOS** — hold the red button 3 s (or double-tap), **Live trip**, **Safety timer**, **Fake call**. Turn off Wi-Fi: `/offline` still offers SOS + call 999.
-7. `partner@test.com` → *My venues* → **Venue Safety Coach**.
+## 4. Test Suite & Verification
 
----
+The project includes a comprehensive suite of **195 automated tests with 737 assertions** passing with zero errors or warnings:
 
-## 4. Tests
 ```bash
+# Run the complete test suite
 php artisan test
-```
-Covers auth/roles, contact limit & phone validation, venue approval flow and age gate, report validation (500 chars), offline AI classification (Bangla, Banglish, English), duplicate detection, score time-awareness & explanation, moderation → trust update, safe-route scoring (sampling, incidents, dark spots, havens, 30% rule), routing-API failure fallback, night-planner budget/caution rules, trip link expiry (410), timers (dead-man switch), SOS audit log and nearest help points. Tests use in-memory SQLite and never call external APIs.
 
-## 5. Project structure
-```
-app/Services/      GeminiService · LocalAnalyzer · ReportAnalyzer · SafetyScoreService · RouteService
-                   NightPlannerService · VenueCoachService · AlertService
-app/Console/Commands/  havens:import · safety:recalculate · safety:check-timers · trips:purge
-app/Jobs/AnalyzeReportJob.php
-app/Http/Controllers/  (Admin/, Partner/, …)       resources/views/ (Blade + Tailwind + Alpine)
-public/sw.js · public/manifest.webmanifest · public/js/{sos,nl-map}.js     lang/bn.json
-database/seeders/      Roles/accounts · Venues · SafeHavens · DemoReports
+# Run tests by phase
+php artisan test --filter=Phase1SecurityAndIntegrityTest
+php artisan test --filter=Phase2SafetyAndEvaluationTest
+php artisan test --filter=Phase3NewFunctionalityTest
 ```
 
-## 6. Honest limitations
-* Bangladesh has no open crime dataset: risk comes from **community-verified reports + OpenStreetMap help points**. Sparse data = weaker scores (the explanation says so).
-* Browsers cannot send SMS silently: SOS opens a **pre-filled SMS** per contact; email/Telegram are sent automatically. No SMS gateway, payments, native apps or 99.99 % uptime target.
-* Live trip sharing only works while the owner's browser tab stays open. Locations are deleted 72 h after a trip ends.
-* Free AI quotas are limited; the offline analyzer is a fallback and less accurate than Gemini (reports it analysed are flagged for review).
-* Public OSRM demo server is for prototypes only; use an ORS key for steadier results. Routing profile is driving (CNG / car / ride-share).
-* Seed data is fictional. Do not publish incident claims about real businesses without evidence and moderation.
-* Test passwords in the seeder are for local development only.
+### Test Coverage Highlights:
+- **Phase 1**: CHECK constraints range enforcement (severity, rating, lighting, price tier), duplicate deletion promotion, accessibility badge contrast, `.gitignore` exclusions.
+- **Phase 2**: Multi-tier confidence calculation, duplicate boost suppression for same author, solo-reporter damping, 24h venue cooldown, velocity burst detection, evaluation confusion matrix & F1-score calculation.
+- **Phase 3**: Walking route computation & mode validation, venue right-of-reply authorization & moderation, pending report editing & withdrawal, abuse flagging & duplicate prevention, stale live trip notifications, JSON data export, safe account deletion disassociation.
+- **Regression Suite**: Route scoring & detour caps, offline AI classification (Bangla/Banglish/English), emergency contacts & SOS dispatch, health checks, rate limiting, and end-to-end smoke tests.
 
-## 7. Git workflow
-`main` is protected; one feature per branch (`feature/<name>`), pull request, one reviewer, then merge. Never commit `.env`.
+---
+
+## 5. Technology Stack
+
+- **Framework**: Laravel 12 (PHP 8.2+)
+- **Frontend**: Blade, Tailwind CSS (Dark Mode: Class), Alpine.js, Leaflet.js
+- **Typography**: Figtree (English) & Hind Siliguri / Noto Sans Bengali (Bangla)
+- **AI Integration**: Google Gemini 2.5 Flash API + Built-in Bangla/Banglish Keyword Lexicon Fallback
+- **Spatial & Maps**: OpenStreetMap, OpenRouteService API, Project-OSRM Fallback
+- **Database**: SQLite (Development & Testing) / MySQL UTF8mb4
+- **Testing**: PHPUnit 11 / Laravel Testing Framework

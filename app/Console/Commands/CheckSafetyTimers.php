@@ -20,12 +20,18 @@ class CheckSafetyTimers extends Command
             ->where('due_at', '<=', now())->get();
 
         foreach ($due as $t) {
-            $msg = "{$t->user->name} set a safety timer for ".$t->due_at->format('h:i A')." and has not confirmed they are safe."
+            $msg = "{$t->user->name} set a safety timer for ".$t->due_at->format('h:i A').' and has not confirmed they are safe.'
                 .($t->note ? " Note: {$t->note}." : '')
                 .' Please call them now. In an emergency dial 999.';
             $sent = $alerts->notifyContacts($t->user, 'NightLifeBD safety alert', $msg);
             $t->update(['alerted_at' => now()]);
-            AuditLog::record($t->user_id, 'timer.alert', ['timer_id' => $t->id] + $sent);
+            AuditLog::record($t->user_id, 'timer.alert', [
+                'timer_id' => $t->id,
+                'contacts' => $sent['contacts'],
+                'email' => $sent['email'],
+                'telegram' => $sent['telegram'],
+                'is_simulation' => $sent['is_simulation'],
+            ]);
             $this->line("Alerted contacts of user #{$t->user_id}");
         }
         $this->info($due->count().' timer(s) processed.');

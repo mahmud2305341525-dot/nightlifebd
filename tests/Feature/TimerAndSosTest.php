@@ -2,8 +2,8 @@
 
 namespace Tests\Feature;
 
+use App\Models\SafeHaven;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Facades\Mail;
 use Tests\TestCase;
 
 class TimerAndSosTest extends TestCase
@@ -43,10 +43,68 @@ class TimerAndSosTest extends TestCase
 
     public function test_nearest_help_points_sorted_by_distance(): void
     {
-        \App\Models\SafeHaven::create(['type' => 'police', 'name' => 'Far', 'lat' => 23.90, 'lng' => 90.40]);
-        \App\Models\SafeHaven::create(['type' => 'police', 'name' => 'Near', 'lat' => 23.781, 'lng' => 90.401]);
+        SafeHaven::create(['type' => 'police', 'name' => 'Far', 'lat' => 23.90, 'lng' => 90.40]);
+        SafeHaven::create(['type' => 'police', 'name' => 'Near', 'lat' => 23.781, 'lng' => 90.401]);
         $res = $this->getJson('/api/nearest?lat=23.78&lng=90.40')->assertOk();
         $this->assertSame('Near', $res->json('0.name'));
         $this->assertGreaterThanOrEqual(1, $res->json('0.eta_min'));
+    }
+
+    public function test_user_cannot_create_multiple_simultaneous_active_safety_timers(): void
+    {
+        $user = $this->userWithRole('user');
+        $user->emergencyContacts()->create(['name' => 'Dad', 'phone' => '01712345678']);
+
+        // First timer starts successfully
+        $this->actingAs($user)->post('/timer', [
+            'due_at' => now()->addMinutes(30)->toDateTimeString(),
+            'note' => 'Walking home from campus',
+        ])->assertSessionHasNoErrors();
+
+        $this->assertDatabaseCount('safety_timers', 1);
+
+        // Attempting to start a second active timer while first is running is rejected
+        $this->actingAs($user)->post('/timer', [
+            'due_at' => now()->addMinutes(45)->toDateTimeString(),
+            'note' => 'Second timer attempt',
+        ])->assertSessionHasErrors('due_at');
+
+        $this->assertDatabaseCount('safety_timers', 1);
+
+        // Confirming the running timer allows starting a new one
+        $timer = $user->safetyTimers()->first();
+        $this->actingAs($user)->post("/timer/{$timer->id}/confirm")->assertSessionHasNoErrors();
+        $this->assertNotNull($timer->fresh()->confirmed_at);
+
+        $this->actingAs($user)->post('/timer', [
+            'due_at' => now()->addMinutes(45)->toDateTimeString(),
+            'note' => 'New timer after confirmation',
+        ])->assertSessionHasNoErrors();
+
+        $this->assertDatabaseCount('safety_timers', 2);
+    }
+
+    public function test_sos_page_supplies_and_displays_emergency_contacts(): void
+    {
+        $user = $this->userWithRole('user');
+        $user->emergencyContacts()->create([
+            'name' => 'Dr. Rafiq',
+            'phone' => '01712345678',
+            'relation' => 'Doctor',
+        ]);
+
+        $other = $this->userWithRole('user');
+        $other->emergencyContacts()->create([
+            'name' => 'Stranger Danger',
+            'phone' => '01899999999',
+            'relation' => 'None',
+        ]);
+
+        $res = $this->actingAs($user)->get('/sos');
+        $res->assertOk();
+        $res->assertViewHas('contacts');
+        $res->assertSee('Dr. Rafiq');
+        $res->assertSee('01712345678');
+        $res->assertDontSee('Stranger Danger');
     }
 }

@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\Report;
 use App\Support\Geo;
 
 /**
@@ -10,14 +11,25 @@ use App\Support\Geo;
  */
 class LocalAnalyzer
 {
+    public const VERSION = '2.1.0-lexicon';
+
     /** category => keyword fragments (matched case-insensitively as substrings) */
     private const LEXICON = [
-        'harassment' => ['হয়রানি', 'উত্ত্যক্ত', 'ইভটিজিং', 'ইভ টিজিং', 'কটূক্তি', 'অশালীন', 'পিছু নি', 'পিছু ধরে', 'harass', 'eve teas', 'eveteas', 'catcall', 'stalk', 'followed me', 'following me', 'inappropriate', 'molest', 'hoyrani', 'utyokto', 'kharap kotha', 'pichu', 'groped', 'touched me'],
-        'theft' => ['ছিনতাই', 'চুরি', 'পকেটমার', 'মোবাইল নিয়ে', 'ব্যাগ নিয়ে', 'snatch', 'theft', 'stole', 'stolen', 'pickpocket', 'robbed', 'robbery', 'chintai', 'churi', 'mobile niye', 'bag niye'],
-        'violence' => ['মারামারি', 'ছুরি', 'হামলা', 'মারধর', 'অস্ত্র', 'assault', 'attack', 'knife', 'fight', 'beaten', 'beat up', 'gunda', 'maramari', 'hamla', 'weapon', 'gang', 'ganjam'],
-        'dark_road' => ['অন্ধকার', 'আলো নেই', 'আলো কম', 'লাইট নেই', 'বাতি নেই', 'নির্জন', 'dark', 'andhar', 'andhokar', 'streetlight', 'street light', 'no light', 'light nai', 'poor lighting', 'unlit', 'sunsan', 'empty road', 'isolated', 'deserted'],
-        'overcharging' => ['ভাড়া বেশি', 'বেশি ভাড়া', 'বেশি টাকা', 'অতিরিক্ত টাকা', 'ঠকাল', 'ঠকিয়ে', 'overcharg', 'extra taka', 'extra charge', 'too expensive', 'vara beshi', 'bhara beshi', 'ভাড়া চাইল', 'scam', 'cheated', 'rip off', 'ripped off'],
-        'positive' => ['নিরাপদ', 'ভালো ছিল', 'ভাল ছিল', 'সুন্দর পরিবেশ', 'গার্ড ছিল', 'নিরাপত্তা কর্মী', 'safe', 'secure', 'well lit', 'well-lit', 'guard was', 'friendly staff', 'comfortable', 'nirapod', 'peaceful', 'felt good', 'great place'],
+        'harassment' => ['হয়রানি', 'উত্ত্যক্ত', 'ইভটিজিং', 'ইভ টিজিং', 'কটূক্তি', 'অশালীন', 'পিছু নি', 'পিছু ধরে', 'harass', 'eve teas', 'eveteas', 'eve-teasing', 'catcall', 'stalk', 'followed me', 'following me', 'inappropriate', 'molest', 'hoyrani', 'utyokto', 'kharap kotha', 'baje kotha', 'pichu', 'groped', 'touched me'],
+        'theft' => ['ছিনতাই', 'চুরি', 'পকেটমার', 'মোবাইল নিয়ে', 'ব্যাগ নিয়ে', 'snatch', 'snatched', 'theft', 'stole', 'stolen', 'pickpocket', 'robbed', 'robbery', 'chintai', 'chintay', 'churi', 'mobile niye', 'bag niye', 'chintaikaari', 'mugger', 'mugging'],
+        'violence' => ['মারামারি', 'ছুরি', 'হামলা', 'মারধর', 'অস্ত্র', 'assault', 'attack', 'knife', 'fight', 'beaten', 'beat up', 'gunda', 'maramari', 'hamla', 'weapon', 'gang', 'ganjam', 'churikaaghat', 'churi niye', 'churi diye', 'koptise', 'stabbed', 'physical assault'],
+        'dark_road' => ['অন্ধকার', 'আলো নেই', 'আলো কম', 'লাইট নেই', 'বাতি নেই', 'নির্জন', 'dark', 'andhar', 'andhokar', 'streetlight', 'street light', 'no light', 'light nai', 'bati nai', 'batti nai', 'alo nai', 'poor lighting', 'unlit', 'sunsan', 'empty road', 'isolated', 'deserted', 'pitch dark'],
+        'overcharging' => ['ভাড়া বেশি', 'বেশি ভাড়া', 'বেশি টাকা', 'অতিরিক্ত টাকা', 'অতিরিক্ত', 'মিটার ছাড়া', 'ঠকাল', 'ঠকিয়ে', 'overcharg', 'extra taka', 'extra charge', 'too expensive', 'vara beshi', 'bhara beshi', 'ভাড়া চাইল', 'বেশি চাইল', 'scam', 'cheated', 'rip off', 'ripped off', 'refused the meter'],
+        'positive' => ['নিরাপদ', 'ভালো ছিল', 'ভাল ছিল', 'সুন্দর পরিবেশ', 'গার্ড ছিল', 'নিরাপত্তা কর্মী', 'safe', 'secure', 'well lit', 'well-lit', 'guard was', 'friendly staff', 'comfortable', 'nirapod', 'peaceful', 'felt good', 'great place', 'completely secure'],
+    ];
+
+    private const ADVERSARIAL_PATTERNS = [
+        '/system override/i',
+        '/ignore (all )?(previous )?(instructions|rules|directives)/i',
+        '/disregard (all )?(previous )?(instructions|rules|directives)/i',
+        '/return category/i',
+        '/output category/i',
+        '/```(json)?\s*\{.*category/i',
     ];
 
     private const NEGATED_POSITIVE = ['নিরাপদ নয়', 'নিরাপদ না', 'অনিরাপদ', 'not safe', 'unsafe', 'isn\'t safe', 'wasn\'t safe', 'nirapod noy', 'nirapod na', 'anirapod', 'not secure', 'felt unsafe', 'insecure', 'uncomfortable', 'unfriendly', 'not comfortable'];
@@ -76,13 +88,19 @@ class LocalAnalyzer
             }
         }
 
-        $label = strtolower(\App\Models\Report::categoryLabel($category));
+        $spam = $this->spam($text);
+        if ($spam >= 0.80) {
+            $category = 'other';
+            $severity = 2;
+        }
+
+        $label = strtolower(Report::categoryLabel($category));
 
         return [
             'category' => $category,
             'severity' => $severity,
             'language' => $this->language($text),
-            'spam_probability' => $this->spam($text),
+            'spam_probability' => $spam,
             'summary_en' => ucfirst($label)." report, severity {$severity}/5 (keyword analysis).",
             'hour_hint' => $this->hourHint($text),
         ];
@@ -127,6 +145,13 @@ class LocalAnalyzer
         }
         if (preg_match('/^[\d\W]+$/u', trim($text))) {
             $p += 0.4;
+        }
+
+        foreach (self::ADVERSARIAL_PATTERNS as $pattern) {
+            if (preg_match($pattern, $text)) {
+                $p += 0.85;
+                break;
+            }
         }
 
         return round(min(0.99, $p), 2);

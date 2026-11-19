@@ -11,4 +11,6 @@ use Illuminate\Support\Facades\Schedule;
 
 Schedule::command('safety:recalculate')->daily();
 Schedule::command('safety:check-timers')->everyMinute();
+Schedule::command('trips:check-stale')->everyMinute();
 Schedule::command('trips:purge')->hourly();
+Schedule::command('events:notify-upcoming')->dailyAt('18:00');

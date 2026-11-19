@@ -11,7 +11,7 @@ class LocalAnalyzerTest extends TestCase
     #[DataProvider('samples')]
     public function test_categories(string $text, string $category): void
     {
-        $this->assertSame($category, (new LocalAnalyzer())->analyze($text)['category']);
+        $this->assertSame($category, (new LocalAnalyzer)->analyze($text)['category']);
     }
 
     public static function samples(): array
@@ -32,7 +32,7 @@ class LocalAnalyzerTest extends TestCase
 
     public function test_severity_and_language(): void
     {
-        $a = new LocalAnalyzer();
+        $a = new LocalAnalyzer;
         $this->assertSame(5, $a->analyze('A fight broke out and someone had a knife')['severity']);
         $this->assertSame('bn', $a->language('রাত ১১টায় রাস্তায় আলো নেই'));
         $this->assertSame('en', $a->language('The road was dark and empty'));
@@ -42,7 +42,7 @@ class LocalAnalyzerTest extends TestCase
 
     public function test_spam_detection_and_hour_hint(): void
     {
-        $a = new LocalAnalyzer();
+        $a = new LocalAnalyzer;
         $this->assertGreaterThanOrEqual(0.6, $a->spam('Buy followers now!!! http://spam.example'));
         $this->assertLessThan(0.3, $a->spam('A group was following me near the footbridge'));
         $this->assertSame(23, $a->hourHint('happened at 11 pm near gate'));
@@ -51,7 +51,7 @@ class LocalAnalyzerTest extends TestCase
 
     public function test_embedding_similarity(): void
     {
-        $a = new LocalAnalyzer();
+        $a = new LocalAnalyzer;
         $same = LocalAnalyzer::cosine($a->embed('phone snatched near the gate'), $a->embed('phone snatched near the gate'));
         $diff = LocalAnalyzer::cosine($a->embed('phone snatched near the gate'), $a->embed('great coffee and quiet music upstairs'));
         $this->assertEqualsWithDelta(1.0, $same, 0.0001);

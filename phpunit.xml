@@ -3,6 +3,7 @@
          xsi:noNamespaceSchemaLocation="vendor/phpunit/phpunit/phpunit.xsd"
          bootstrap="vendor/autoload.php"
          colors="true"
+         cacheResult="false"
 >
     <testsuites>
         <testsuite name="Unit">
@@ -10,6 +11,9 @@
         </testsuite>
         <testsuite name="Feature">
             <directory>tests/Feature</directory>
+        </testsuite>
+        <testsuite name="Smoke">
+            <directory>tests/Smoke</directory>
         </testsuite>
     </testsuites>
     <source>
@@ -32,5 +36,6 @@
         <env name="PULSE_ENABLED" value="false"/>
         <env name="TELESCOPE_ENABLED" value="false"/>
         <env name="NIGHTWATCH_ENABLED" value="false"/>
+        <env name="NIGHTLIFE_DEMO_ENABLED" value="false"/>
     </php>
 </phpunit>

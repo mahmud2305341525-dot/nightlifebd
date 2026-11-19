@@ -38,6 +38,14 @@ return [
             'report' => false,
         ],
 
+        'report_photos' => [
+            'driver' => 'local',
+            'root' => storage_path('app/private/incident_photos'),
+            'visibility' => 'private',
+            'throw' => false,
+            'report' => false,
+        ],
+
         'public' => [
             'driver' => 'local',
             'root' => storage_path('app/public'),

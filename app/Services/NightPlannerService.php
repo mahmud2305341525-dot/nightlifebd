@@ -35,9 +35,7 @@ class NightPlannerService
         'coffee' => ['কফি', 'coffee', 'cafe', 'ক্যাফে'],
     ];
 
-    public function __construct(private GeminiService $gemini, private LocalAnalyzer $local)
-    {
-    }
+    public function __construct(private GeminiService $gemini, private LocalAnalyzer $local) {}
 
     /**
      * @param  array{text?:string,budget?:?int,group?:?int,area?:?string,hour?:?int}  $in
@@ -57,7 +55,8 @@ class NightPlannerService
         $source = 'rules';
         if ($this->gemini->enabled()) {
             for ($try = 0; $try < 2 && ! $plan; $try++) {
-                $plan = $this->viaGemini($filters, $candidates, $bucket);
+                // On retry, pass $try so the prompt can be tightened (explicit IDs on 2nd attempt).
+                $plan = $this->viaGemini($filters, $candidates, $bucket, $try);
             }
             if ($plan) {
                 $source = 'gemini';
@@ -102,13 +101,17 @@ P);
 
         // regex fallback fills whatever is still missing (works offline, understands Bangla digits)
         $t = Geo::asciiDigits(mb_strtolower($text));
-        if (! $f['group'] && preg_match('/(\d+)\s*(জন|people|persons|person|friends|pax|ppl)/u', $t, $m)) {
+        if (! $f['group'] && preg_match('/(\d+)\s*(জন|মানুষ|বন্ধু|people|persons|person|friends|pax|ppl)/u', $t, $m)) {
             $f['group'] = (int) $m[1];
         }
-        if (! $f['budget'] && preg_match('/(\d[\d,]{2,})\s*(টাকা|taka|tk|bdt|৳)?/u', $t, $m)) {
-            $n = (int) str_replace(',', '', $m[1]);
-            if ($n >= 100) {
-                $f['budget'] = $n;
+        if (! $f['budget']) {
+            if (preg_match('/(?:৳|tk|bdt)\s*(\d[\d,]{1,})/u', $t, $m) || preg_match('/(\d[\d,]{1,})\s*(?:টাকা|taka|tk|bdt|৳)/u', $t, $m)) {
+                $f['budget'] = (int) str_replace(',', '', $m[1]);
+            } elseif (preg_match('/\b(\d{3,6})\b/', $t, $m)) {
+                $val = (int) $m[1];
+                if ($val >= 300 && ! preg_match('/\b(?:road|rd|sector|sec|house|block|pm|am|নং|রোড|সেক্টর)\s*'.preg_quote($m[1], '/').'/u', $t)) {
+                    $f['budget'] = $val;
+                }
             }
         }
         if (! $f['area']) {
@@ -142,14 +145,18 @@ P);
         $venues = Venue::approved()
             ->with('scores')
             ->when(! $adult, fn ($q) => $q->where('is_restricted', false))
-            ->when($f['area'], fn ($q, $a) => $q->where('area', 'like', $a))
-            ->get()
-            ->reject(fn (Venue $v) => $v->badgeFor($bucket) === 'caution');
+            ->when($f['area'], fn ($q, $a) => $q->where('area', 'like', '%'.trim($a).'%'))
+            ->get();
 
-        $query = $local = $f['text'].' '.implode(' ', $f['vibes']);
+        // Prefer safe/moderate venues; if an area is currently under incident caution,
+        // keep the highest-scoring venues with caution alerts rather than returning an empty screen.
+        $safeVenues = $venues->reject(fn (Venue $v) => $v->badgeFor($bucket) === 'caution');
+        $pool = $safeVenues->isNotEmpty() ? $safeVenues : $venues;
+
+        $query = $f['text'].' '.implode(' ', $f['vibes']);
         $qv = $this->local->embed($query);
 
-        return $venues
+        return $pool
             ->map(function (Venue $v) use ($qv, $bucket) {
                 $sim = LocalAnalyzer::cosine($qv, $this->local->embed($v->searchText()));
                 $safety = ($v->scoreFor($bucket)?->score ?? 50) / 100;
@@ -167,7 +174,7 @@ P);
         return (int) (config('nightlife.tier_cost.'.$v->price_tier, 700) * $group);
     }
 
-    private function viaGemini(array $f, Collection $cands, string $bucket): ?array
+    private function viaGemini(array $f, Collection $cands, string $bucket, int $try = 0): ?array
     {
         $list = $cands->map(fn (Venue $v) => [
             'id' => $v->id, 'name' => $v->name, 'category' => $v->category, 'area' => $v->area,
@@ -178,11 +185,17 @@ P);
         $budget = $f['budget'] ?? 'no limit';
         $vibes = implode(', ', $f['vibes']);
 
+        // On the second attempt, restrict the model explicitly to valid IDs to prevent hallucination.
+        $idConstraint = $try > 0
+            ? 'CRITICAL: You MUST only use venue_id values from this exact list: '.implode(', ', $cands->pluck('id')->all()).'. Using any other ID will be rejected.'
+            : 'Never invent venues — only use IDs from the JSON list above.';
+
         $d = $this->gemini->json(<<<P
-You plan a safe night out in Dhaka. Use ONLY the venues in this JSON list (never invent venues):
+You plan a safe night out in Dhaka. Use ONLY the venues in this JSON list:
 {$listJson}
 Group size: {$f['group']}. Total budget (BDT): {$budget}. Start hour: {$f['hour']}. Vibes: {$vibes}. Original request: """{$f['text']}"""
 Pick 2 or 3 stops, prefer higher safety_score and venues in the same area, and keep total cost (price_per_person_bdt x group size) within budget.
+{$idConstraint}
 Return ONLY JSON: {"title":"short title","stops":[{"venue_id":number,"reason":"one short sentence in the user's language"}],"tip":"one safety tip"}
 P);
         if (! $d || empty($d['stops']) || ! is_array($d['stops'])) {
@@ -195,14 +208,21 @@ P);
         foreach (array_slice($d['stops'], 0, 4) as $s) {
             $v = $byId->get((int) ($s['venue_id'] ?? 0));
             if (! $v) {
-                return null; // hallucinated venue -> reject, caller retries / falls back
+                return null; // hallucinated venue → reject, caller retries / falls back
             }
             $cost = $this->stopCost($v, $f['group']);
             $total += $cost;
             $stops[] = ['venue' => $v, 'reason' => (string) ($s['reason'] ?? ''), 'cost' => $cost];
         }
         if ($f['budget'] && $total > $f['budget']) {
-            return null;
+            // Trim stops if budget slightly exceeded instead of throwing away entire plan
+            while (count($stops) > 1 && $total > $f['budget']) {
+                $removed = array_pop($stops);
+                $total -= $removed['cost'];
+            }
+            if ($total > $f['budget']) {
+                return null;
+            }
         }
 
         return $this->finish($stops, $f, (string) ($d['title'] ?? __('Your safe night plan')), (string) ($d['tip'] ?? ''), $bucket);
@@ -215,26 +235,59 @@ P);
         $stops = [];
         $total = 0;
         $usedCats = [];
-        foreach ($cands as $v) {
+        $budget = $f['budget'];
+
+        // Sort candidates by safety rating first
+        $sorted = $cands->sortByDesc(fn (Venue $v) => $v->scoreFor($bucket)?->score ?? 50);
+
+        foreach ($sorted as $v) {
             if (count($stops) >= 3) {
                 break;
             }
-            if (in_array($v->category, $usedCats, true) && $cands->count() > 3) {
+            if (in_array($v->category, $usedCats, true) && $sorted->count() > 3) {
                 continue;
             }
             $cost = $this->stopCost($v, $f['group']);
-            if ($f['budget'] && $total + $cost > $f['budget']) {
-                continue;
+            if ($budget && ($total + $cost) > $budget) {
+                // If we already have stops, avoid adding more to stay within budget
+                if (count($stops) >= 1) {
+                    continue;
+                }
+                // If single stop itself exceeds budget, keep looking for a cheaper tier
+                if ($cost > $budget && $sorted->count() > 1) {
+                    continue;
+                }
             }
             $total += $cost;
             $usedCats[] = $v->category;
-            $stops[] = ['venue' => $v, 'reason' => __('Good match for your request and a :badge safety rating at this hour.', ['badge' => $v->badgeFor($bucket)]), 'cost' => $cost];
+            $stops[] = [
+                'venue' => $v,
+                'reason' => __('Good match for your request with a :badge safety rating at this hour.', ['badge' => $v->badgeFor($bucket)]),
+                'cost' => $cost,
+            ];
         }
-        if (! $stops) {
+
+        // If budget was very constrained, gracefully select the most affordable safe venue
+        if (empty($stops) && $cands->isNotEmpty()) {
+            $cheapest = $cands->sortBy('price_tier')->first();
+            $cost = $this->stopCost($cheapest, $f['group']);
+            $total = $cost;
+            $stops[] = [
+                'venue' => $cheapest,
+                'reason' => __('Most budget-friendly safe venue selected for your party size.', ['badge' => $cheapest->badgeFor($bucket)]),
+                'cost' => $cost,
+            ];
+        }
+
+        if (empty($stops)) {
             return null;
         }
 
-        return $this->finish($stops, $f, __('Your safe night plan'), __('Share a live trip link with a friend before you travel between stops.'), $bucket);
+        $tip = ($budget && $total > $budget)
+            ? __('Note: Estimated cost (~৳:cost) is slightly above your budget. Consider sharing items or ordering light snacks.', ['cost' => number_format($total)])
+            : __('Share a live trip link with a friend before you travel between stops.');
+
+        return $this->finish($stops, $f, __('Your safe night plan'), $tip, $bucket);
     }
 
     private function finish(array $stops, array $f, string $title, string $tip, string $bucket): array

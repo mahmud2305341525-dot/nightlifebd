@@ -22,14 +22,18 @@
         async function poll() {
             try {
                 const r = await fetch('{{ route('track.data', $trip->token) }}', { headers: { Accept: 'application/json' } });
-                if (r.status === 410) { document.getElementById('s').textContent = 'This trip has ended or the link expired.'; clearInterval(iv); return; }
+                if (r.status === 410) { document.getElementById('s').textContent = '🔒 This trip has ended or the sharing link has expired.'; clearInterval(iv); return; }
                 const d = await r.json();
                 if (d.lat != null) {
                     if (!marker) marker = L.marker([d.lat, d.lng]).addTo(map); else marker.setLatLng([d.lat, d.lng]);
                     if (line) map.removeLayer(line);
                     line = L.polyline(d.path, { color: '#4f46e5' }).addTo(map);
                     if (first) { map.setView([d.lat, d.lng], 16); first = false; }
-                    document.getElementById('s').textContent = 'Last update ' + d.last_ping_at + ' · link expires ' + d.expires_at;
+                    if (d.is_stale) {
+                        document.getElementById('s').innerHTML = '<span style="color:#fbbf24;font-weight:bold">⚠️ Location stale (' + d.last_ping_at + ') — traveler may have lost connectivity</span> · link expires ' + d.expires_at;
+                    } else {
+                        document.getElementById('s').textContent = 'Last update ' + d.last_ping_at + ' · link expires ' + d.expires_at;
+                    }
                 }
             } catch (e) { document.getElementById('s').textContent = 'Connection problem, retrying...'; }
         }

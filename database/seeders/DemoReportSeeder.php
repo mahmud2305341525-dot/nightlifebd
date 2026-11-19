@@ -19,7 +19,7 @@ class DemoReportSeeder extends Seeder
     public function run(): void
     {
         mt_srand(404);
-        $local = new LocalAnalyzer();
+        $local = new LocalAnalyzer;
         $users = User::whereIn('email', array_map(fn ($n) => "{$n}@demo.test", ['rafi', 'nusrat', 'tanvir', 'mim', 'sakib', 'anika']))->orderBy('id')->get();
         $admin = User::where('email', 'safety@test.com')->first();
 

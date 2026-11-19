@@ -32,4 +32,40 @@ class ContactLimitTest extends TestCase
         $c = $a->emergencyContacts()->create(['name' => 'Mom', 'phone' => '01712345678']);
         $this->actingAs($b)->delete('/contacts/'.$c->id)->assertForbidden();
     }
+
+    public function test_duplicate_normalized_phone_is_rejected_for_same_user(): void
+    {
+        $user = $this->userWithRole('user');
+        $this->actingAs($user)->post('/contacts', [
+            'name' => 'Brother',
+            'phone' => '01712345678',
+        ])->assertSessionHasNoErrors();
+
+        // Trying to register the exact same number with different formatting (+8801712-345678)
+        $this->actingAs($user)->post('/contacts', [
+            'name' => 'Brother Again',
+            'phone' => '+8801712-345678',
+        ])->assertSessionHasErrors('phone');
+
+        $this->assertDatabaseCount('emergency_contacts', 1);
+    }
+
+    public function test_different_users_can_register_the_same_emergency_contact_phone(): void
+    {
+        $userA = $this->userWithRole('user');
+        $userB = $this->userWithRole('user');
+
+        $this->actingAs($userA)->post('/contacts', [
+            'name' => 'Dad',
+            'phone' => '01712345678',
+        ])->assertSessionHasNoErrors();
+
+        // Different user can also register the same contact phone
+        $this->actingAs($userB)->post('/contacts', [
+            'name' => 'Father',
+            'phone' => '01712345678',
+        ])->assertSessionHasNoErrors();
+
+        $this->assertDatabaseCount('emergency_contacts', 2);
+    }
 }

@@ -81,13 +81,29 @@
         var contacts = (data && data.contacts) || [];
         var sep = /iPhone|iPad|iPod/i.test(navigator.userAgent) ? '&' : '?';
         contacts.forEach(function (c) {
-            var row = el('div', 'flex gap-2');
-            var sms = el('a', 'flex-1 text-center rounded-lg bg-indigo-600 text-white py-3 font-semibold', 'Text ' + c.name);
+            var cleanDigits = String(c.phone).replace(/\D/g, '');
+            if (cleanDigits.startsWith('01')) cleanDigits = '88' + cleanDigits;
+            else if (!cleanDigits.startsWith('88') && cleanDigits.length === 10) cleanDigits = '880' + cleanDigits;
+
+            var row = el('div', 'flex gap-2 items-center');
+            var wa = el('a', 'flex-1 text-center rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white py-2.5 font-semibold text-xs', '💬 WhatsApp ' + c.name);
+            wa.href = 'https://wa.me/' + cleanDigits + '?text=' + encodeURIComponent(msg);
+            wa.target = '_blank';
+
+            var sms = el('a', 'rounded-lg bg-indigo-600 text-white px-3 py-2.5 font-semibold text-xs text-center', 'SMS');
             sms.href = 'sms:' + c.phone + sep + 'body=' + encodeURIComponent(msg);
-            var call = el('a', 'rounded-lg bg-slate-800 text-white px-4 py-3 font-semibold', 'Call');
+
+            var call = el('a', 'rounded-lg bg-slate-800 text-white px-3 py-2.5 font-semibold text-xs text-center', '📞');
             call.href = 'tel:' + c.phone;
-            row.appendChild(sms); row.appendChild(call); actionsEl.appendChild(row);
+
+            row.appendChild(wa); row.appendChild(sms); row.appendChild(call); actionsEl.appendChild(row);
         });
+        if (contacts.length) {
+            var bcast = el('a', 'block text-center rounded-lg bg-emerald-700 hover:bg-emerald-600 text-white py-2.5 text-xs font-bold', '📢 Broadcast SOS via WhatsApp');
+            bcast.href = 'https://api.whatsapp.com/send?text=' + encodeURIComponent(msg);
+            bcast.target = '_blank';
+            actionsEl.appendChild(bcast);
+        }
         if (!contacts.length) {
             actionsEl.appendChild(el('p', 'text-sm text-amber-700', 'You have no emergency contacts yet. Add some in Safety tools > Emergency contacts.'));
         }
@@ -111,14 +127,20 @@
 
         if (cfg) {
             try {
+                var reqId = 'sos_' + Date.now() + '_' + Math.random().toString(36).substring(2, 9);
+                var payload = Object.assign({}, pos || {}, { request_id: reqId });
                 var r = await fetch(cfg.endpoint, {
                     method: 'POST', credentials: 'same-origin',
                     headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'X-CSRF-TOKEN': cfg.csrf },
-                    body: JSON.stringify(pos || {})
+                    body: JSON.stringify(payload)
                 });
                 var j = await r.json();
                 if (r.ok) {
-                    statusEl.textContent += ' Alert sent to ' + (j.contacts || 0) + ' contact(s): ' + (j.email || 0) + ' email, ' + (j.telegram || 0) + ' Telegram.';
+                    if (j.is_simulation) {
+                        statusEl.textContent += ' [Simulation/Dev Mode: Electronic alerts logged locally on server. For real emergencies, use WhatsApp, SMS, or 999.]';
+                    } else if (j.summary) {
+                        statusEl.textContent += ' ' + j.summary;
+                    }
                 }
             } catch (e) {
                 statusEl.textContent += ' (No internet: use the SMS and call buttons.)';

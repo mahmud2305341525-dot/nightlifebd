@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Http\Requests\ProfileUpdateRequest;
+use App\Models\Report;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -48,6 +49,18 @@ class ProfileController extends Controller
         ]);
 
         $user = $request->user();
+
+        // Data Privacy & Safety Scoring Integrity:
+        // Disassociate and anonymize community reports so that personal user identity is completely removed
+        // while vital community incident evidence and venue safety scores remain preserved without foreign key errors.
+        Report::where('user_id', $user->id)->update([
+            'user_id' => null,
+            'is_anonymous' => true,
+        ]);
+
+        // Clean up user-specific private data
+        $user->emergencyContacts()->delete();
+        $user->trips()->delete();
 
         Auth::logout();
 
