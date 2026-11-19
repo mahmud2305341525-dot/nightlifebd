@@ -5,6 +5,24 @@
         <p class="text-sm text-slate-500 dark:text-slate-400">{{ __('Multi-objective comparison: Fastest vs Safest vs Well-Lit, scored on verified incidents, dark spots and nearby help points.') }}</p>
     </x-slot>
 
+    @if (!empty($event))
+        <div class="max-w-7xl mx-auto px-4 pt-3 pb-0">
+            <div class="rounded-xl bg-gradient-to-r from-indigo-900 to-slate-900 text-white p-4 shadow-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border border-indigo-700/80">
+                <div class="flex items-center gap-3">
+                    <span class="text-2xl">🎸</span>
+                    <div>
+                        <div class="text-[10px] uppercase font-bold tracking-wider text-indigo-300">{{ __('Concert Safe Route Navigation') }}</div>
+                        <div class="font-bold text-sm text-white">{{ $event->title }}</div>
+                        <div class="text-xs text-indigo-200">📍 {{ $prefill['venue_name'] ?? ($event->venue ? $event->venue->name : $event->address) }} ({{ $event->area }})</div>
+                    </div>
+                </div>
+                <a href="{{ route('events.show', $event->slug) }}" class="px-3.5 py-1.5 rounded-lg bg-indigo-600/80 hover:bg-indigo-600 text-white text-xs font-semibold transition border border-indigo-400/30 flex items-center gap-1 shrink-0">
+                    ← {{ __('Back to Concert') }}
+                </a>
+            </div>
+        </div>
+    @endif
+
     <div class="max-w-7xl mx-auto p-4 grid lg:grid-cols-3 gap-4">
         <div class="space-y-3">
             <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-sm p-4 space-y-3 text-sm">
@@ -27,8 +45,18 @@
                 <div>
                     <div class="font-semibold text-slate-800 dark:text-slate-100">B · {{ __('Destination') }} <span id="b-txt" class="text-xs text-slate-500 dark:text-slate-400 font-normal">{{ !empty($prefill['venue_name']) ? $prefill['venue_name'] : '' }}</span></div>
                     <select id="b-venue" class="mt-1 w-full border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 rounded-md text-sm">
-                        <option value="">{{ __('Pick a venue or click on the map') }}</option>
-                        @foreach ($venues as $v)<option value="{{ $v->lat }},{{ $v->lng }}">{{ $v->name }}</option>@endforeach
+                        @if(!empty($prefill['to_lat']) && !empty($prefill['to_lng']))
+                            <option value="{{ $prefill['to_lat'] }},{{ $prefill['to_lng'] }}" selected>
+                                {{ $prefill['venue_name'] ?? __('Selected Destination') }} {{ !empty($event) ? '('.__('Concert Venue').')' : '' }}
+                            </option>
+                        @else
+                            <option value="">{{ __('Pick a venue or click on the map') }}</option>
+                        @endif
+                        @foreach ($venues as $v)
+                            @if(empty($prefill['venue_name']) || $v->name !== $prefill['venue_name'])
+                                <option value="{{ $v->lat }},{{ $v->lng }}">{{ $v->name }}</option>
+                            @endif
+                        @endforeach
                     </select>
                 </div>
                 <div>
@@ -132,20 +160,27 @@
                 setB(lat, lng);
             };
 
-            // Auto-detect GPS for starting point if destination venue was prefilled from venue details
+            // Auto-detect GPS for starting point if destination venue was prefilled from venue/event details
             if (prefill.to_lat && prefill.to_lng) {
-                setB(prefill.to_lat, prefill.to_lng);
+                setB(parseFloat(prefill.to_lat), parseFloat(prefill.to_lng));
                 if (navigator.geolocation) {
                     navigator.geolocation.getCurrentPosition(
                         p => {
                             setA(p.coords.latitude, p.coords.longitude);
-                            hint.textContent = @json(__('GPS locked! Press "Find safest route".'));
+                            hint.textContent = @json(__('Location locked! Computing safest routes…'));
+                            document.getElementById('go').click();
                         },
                         () => {
-                            hint.textContent = @json(__('Could not auto-detect GPS. Please click "Click on map" or pick start point.'));
+                            // Fallback to Dhaka central coordinate so safe routes are directly computed & displayed!
+                            setA(23.7806, 90.4075);
+                            hint.textContent = @json(__('Auto-selected Dhaka starting point. Click map to customize.'));
+                            document.getElementById('go').click();
                         },
-                        { enableHighAccuracy: true, timeout: 6000 }
+                        { enableHighAccuracy: true, timeout: 3500 }
                     );
+                } else {
+                    setA(23.7806, 90.4075);
+                    document.getElementById('go').click();
                 }
             }
 

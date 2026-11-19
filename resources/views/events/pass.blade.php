@@ -165,7 +165,7 @@
 
             <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 pt-2">
                 {{-- 1. Plan Safe Route --}}
-                <a href="{{ route('route.index', ['dest_lat' => $event->lat, 'dest_lng' => $event->lng, 'dest_name' => $event->title]) }}"
+                <a href="{{ route('events.show', ['event' => $event->slug, 'safe_route' => 1]) }}"
                    class="p-4 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:border-indigo-500 dark:hover:border-indigo-400 transition text-center shadow-sm flex flex-col items-center justify-between gap-2">
                     <span class="text-2xl">🛣️</span>
                     <div>

@@ -264,4 +264,46 @@ class EventBookingAndSafetyTest extends TestCase
         $notifRes->assertOk();
         $notifRes->assertSee('Dhaka Rock Fest 2026');
     }
+
+    public function test_concert_safe_route_integration_preserves_concert_context_and_venue_destination(): void
+    {
+        // 1. Show concert page contains Find Safe Routes Here button and pre-set venue destination
+        $res = $this->actingAs($this->user)->get(route('events.show', $this->event->slug));
+        $res->assertOk();
+        $res->assertSee('Find Safe Routes Here');
+        $res->assertSee('Plan Safe Route Here');
+        $res->assertSee('concert-safe-routes');
+        $res->assertSee('Jamuna Convention Arena');
+        $res->assertSee('Destination Auto-Set');
+
+        // 2. Safe route index route accessed with concert context preserves concert banner and destination
+        $routeRes = $this->actingAs($this->user)->get(route('route.index', [
+            'dest_lat' => $this->event->lat,
+            'dest_lng' => $this->event->lng,
+            'dest_name' => $this->venue->name,
+            'event_id' => $this->event->id,
+        ]));
+        $routeRes->assertOk();
+        $routeRes->assertSee('Concert Safe Route Navigation');
+        $routeRes->assertSee('Dhaka Rock Fest 2026');
+        $routeRes->assertSee('Back to Concert');
+        $routeRes->assertSee('Jamuna Convention Arena');
+        $routeRes->assertSee('Concert Venue');
+
+        // 3. Digital QR pass links to the concert page with safe route activated
+        $booking = EventBooking::create([
+            'user_id' => $this->user->id,
+            'event_id' => $this->event->id,
+            'ticket_tier_id' => $this->tier->id,
+            'quantity' => 1,
+            'unit_price' => 500,
+            'total_price' => 500,
+            'payment_method' => 'mock_bkash',
+            'payment_status' => 'paid',
+            'status' => 'confirmed',
+        ]);
+        $passRes = $this->actingAs($this->user)->get(route('events.bookings.show', $booking->booking_reference));
+        $passRes->assertOk();
+        $passRes->assertSee(route('events.show', ['event' => $this->event->slug, 'safe_route' => 1]));
+    }
 }
