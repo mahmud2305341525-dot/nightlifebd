@@ -69,7 +69,7 @@ class HealthCheck extends Command
         }
 
         // Test Local Analyzer
-        $testResult = $analyzer->classify('রাত ১২টায় ছিনতাইকারীর কবলে পড়েছিলাম');
+        $testResult = $analyzer->analyze('রাত ১২টায় ছিনতাইকারীর কবলে পড়েছিলাম');
         $localOk = ($testResult['category'] ?? null) === 'theft';
         $rows[] = ['Bangla NLP Lexicon', $localOk ? '✅ Active (Recognized ছিনতাই -> theft)' : '⚠️ Check LocalAnalyzer', $localOk ? 'OK' : 'WARN'];
 

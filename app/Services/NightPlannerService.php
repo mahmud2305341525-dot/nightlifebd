@@ -184,6 +184,7 @@ P);
         $listJson = json_encode($list, JSON_UNESCAPED_UNICODE);
         $budget = $f['budget'] ?? 'no limit';
         $vibes = implode(', ', $f['vibes']);
+        $language = preg_match('/[\x{0980}-\x{09FF}]/u', $f['text']) ? 'Bangla' : 'English';
 
         // On the second attempt, restrict the model explicitly to valid IDs to prevent hallucination.
         $idConstraint = $try > 0
@@ -191,21 +192,29 @@ P);
             : 'Never invent venues — only use IDs from the JSON list above.';
 
         $d = $this->gemini->json(<<<P
-You plan a safe night out in Dhaka. Use ONLY the venues in this JSON list:
+You plan a safe night out in Dhaka. Use ONLY the venues in this JSON list.
+Write the title, every reason, and the tip in {$language}.
 {$listJson}
 Group size: {$f['group']}. Total budget (BDT): {$budget}. Start hour: {$f['hour']}. Vibes: {$vibes}. Original request: """{$f['text']}"""
 Pick 2 or 3 stops, prefer higher safety_score and venues in the same area, and keep total cost (price_per_person_bdt x group size) within budget.
 {$idConstraint}
 Return ONLY JSON: {"title":"short title","stops":[{"venue_id":number,"reason":"one short sentence in the user's language"}],"tip":"one safety tip"}
 P);
-        if (! $d || empty($d['stops']) || ! is_array($d['stops'])) {
+        if (! $d || ! isset($d['title'], $d['tip']) || ! is_array($d['stops'] ?? null)) {
+            return null;
+        }
+        $requestedStops = array_slice($d['stops'], 0, 3);
+        if (count($requestedStops) < 2) {
             return null;
         }
 
         $byId = $cands->keyBy('id');
         $stops = [];
         $total = 0;
-        foreach (array_slice($d['stops'], 0, 4) as $s) {
+        foreach ($requestedStops as $s) {
+            if (! is_array($s) || ! isset($s['venue_id'], $s['reason']) || trim((string) $s['reason']) === '') {
+                return null;
+            }
             $v = $byId->get((int) ($s['venue_id'] ?? 0));
             if (! $v) {
                 return null; // hallucinated venue → reject, caller retries / falls back
