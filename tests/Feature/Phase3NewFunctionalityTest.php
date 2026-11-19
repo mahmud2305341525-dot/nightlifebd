@@ -3,7 +3,6 @@
 namespace Tests\Feature;
 
 use App\Jobs\AnalyzeReportJob;
-use App\Models\AuditLog;
 use App\Models\EmergencyContact;
 use App\Models\Report;
 use App\Models\ReportFlag;

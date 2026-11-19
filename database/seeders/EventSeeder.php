@@ -54,7 +54,7 @@ class EventSeeder extends Seeder
                 'lng' => 90.3750,
                 'starts_at' => now()->addDay()->setHour(18)->setMinute(30),
                 'ends_at' => now()->addDay()->setHour(22)->setMinute(0),
-                'description' => "An open-air evening of soothing acoustic guitars, flute harmonies, and soulful indie Bengali songs by the water. Family-friendly with continuous lighting along the lake promenade.",
+                'description' => 'An open-air evening of soothing acoustic guitars, flute harmonies, and soulful indie Bengali songs by the water. Family-friendly with continuous lighting along the lake promenade.',
                 'is_featured' => true,
                 'tiers' => [
                     ['name' => 'Free Community RSVP', 'price' => 0.00, 'capacity' => 250, 'max_per_user' => 4],
@@ -71,7 +71,7 @@ class EventSeeder extends Seeder
                 'lng' => 90.4085,
                 'starts_at' => now()->addDays(4)->setHour(20)->setMinute(0),
                 'ends_at' => now()->addDays(4)->setHour(23)->setMinute(45),
-                'description' => "International and local jazz musicians performing live improvisations. Premium rooftop seating with 360-degree skyline views of Dhaka.",
+                'description' => 'International and local jazz musicians performing live improvisations. Premium rooftop seating with 360-degree skyline views of Dhaka.',
                 'is_featured' => false,
                 'tiers' => [
                     ['name' => 'Standard Entry', 'price' => 1200.00, 'capacity' => 100, 'max_per_user' => 4],
@@ -88,7 +88,7 @@ class EventSeeder extends Seeder
                 'lng' => 90.4010,
                 'starts_at' => now()->addDays(3)->setHour(17)->setMinute(0),
                 'ends_at' => now()->addDays(3)->setHour(23)->setMinute(0),
-                'description' => "Experience the legendary authentic kebabs, bakarkhani, biryani, and live folk music of Puran Dhaka with safe night illumination and designated patrol stations.",
+                'description' => 'Experience the legendary authentic kebabs, bakarkhani, biryani, and live folk music of Puran Dhaka with safe night illumination and designated patrol stations.',
                 'is_featured' => true,
                 'tiers' => [
                     ['name' => 'Foodie Pass (Includes 3 Tastings)', 'price' => 350.00, 'capacity' => 400, 'max_per_user' => 5],
@@ -105,7 +105,7 @@ class EventSeeder extends Seeder
                 'lng' => 90.4030,
                 'starts_at' => now()->addDays(5)->setHour(21)->setMinute(0),
                 'ends_at' => now()->addDays(6)->setHour(2)->setMinute(0),
-                'description' => "Electronic music producers, live synth performances, and immersive laser art. Late-night event backed by NightLifeBD Walk With Me emergency circle check-ins.",
+                'description' => 'Electronic music producers, live synth performances, and immersive laser art. Late-night event backed by NightLifeBD Walk With Me emergency circle check-ins.',
                 'is_featured' => false,
                 'tiers' => [
                     ['name' => 'General Pass', 'price' => 1500.00, 'capacity' => 200, 'max_per_user' => 4],

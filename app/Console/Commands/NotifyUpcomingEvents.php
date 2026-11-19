@@ -10,6 +10,7 @@ use Illuminate\Console\Command;
 class NotifyUpcomingEvents extends Command
 {
     protected $signature = 'events:notify-upcoming';
+
     protected $description = 'Dispatches notifications to users for upcoming concerts and night events starting soon';
 
     public function handle(): int
@@ -20,6 +21,7 @@ class NotifyUpcomingEvents extends Command
 
         if ($upcomingEvents->isEmpty()) {
             $this->info('No events starting within the next 24 hours.');
+
             return self::SUCCESS;
         }
 
@@ -38,7 +40,7 @@ class NotifyUpcomingEvents extends Command
                     EventNotification::create([
                         'user_id' => $user->id,
                         'event_id' => $event->id,
-                        'title' => "🎸 " . __('Concert Alert: :title', ['title' => $event->title]),
+                        'title' => '🎸 '.__('Concert Alert: :title', ['title' => $event->title]),
                         'message' => __('Happening tonight at :loc in :area. Check safety scores and book passes.', [
                             'loc' => $event->venue ? $event->venue->name : $event->address,
                             'area' => $event->area,

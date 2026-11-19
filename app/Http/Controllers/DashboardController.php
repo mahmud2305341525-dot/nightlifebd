@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Event;
 use App\Models\Venue;
 use App\Support\TimeBucket;
 use Illuminate\Http\Request;
@@ -21,7 +22,7 @@ class DashboardController extends Controller
             'timer' => $user->safetyTimers()->whereNull('confirmed_at')->whereNull('alerted_at')->orderBy('due_at')->first(),
             'cautionVenues' => Venue::approved()->with('scores')->get()
                 ->filter(fn ($v) => $v->badgeFor($bucket) === 'caution')->take(4),
-            'featuredEvents' => \App\Models\Event::published()->upcoming()->with(['venue', 'ticketTiers'])->take(2)->get(),
+            'featuredEvents' => Event::published()->upcoming()->with(['venue', 'ticketTiers'])->take(2)->get(),
         ]);
     }
 }

@@ -29,10 +29,10 @@ class EventBooking extends Model
 
         static::creating(function (EventBooking $booking) {
             if (empty($booking->booking_reference)) {
-                $booking->booking_reference = 'NL-EVT-' . strtoupper(Str::random(6));
+                $booking->booking_reference = 'NL-EVT-'.strtoupper(Str::random(6));
             }
             if (empty($booking->qr_token)) {
-                $booking->qr_token = hash('sha256', Str::random(40) . microtime(true));
+                $booking->qr_token = hash('sha256', Str::random(40).microtime(true));
             }
         });
     }

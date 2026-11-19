@@ -10,6 +10,7 @@ use App\Models\User;
 use App\Models\Venue;
 use App\Models\VenueScore;
 use App\Support\TimeBucket;
+use Database\Seeders\RoleSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -18,16 +19,20 @@ class EventBookingAndSafetyTest extends TestCase
     use RefreshDatabase;
 
     private User $user;
+
     private User $admin;
+
     private Venue $venue;
+
     private Event $event;
+
     private EventTicketTier $tier;
 
     protected function setUp(): void
     {
         parent::setUp();
 
-        $this->seed(\Database\Seeders\RoleSeeder::class);
+        $this->seed(RoleSeeder::class);
 
         $this->admin = User::factory()->create(['email' => 'admin_test@nightlifebd.com']);
         $this->admin->assignRole('super_admin');

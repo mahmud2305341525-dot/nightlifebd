@@ -41,10 +41,22 @@ return new class extends Migration
     {
         $driver = Schema::getConnection()->getDriverName();
         if ($driver === 'mysql') {
-            try { DB::statement('ALTER TABLE reports DROP CHECK chk_reports_severity'); } catch (\Throwable) {}
-            try { DB::statement('ALTER TABLE reports DROP CHECK chk_reports_rating'); } catch (\Throwable) {}
-            try { DB::statement('ALTER TABLE venues DROP CHECK chk_venues_lighting'); } catch (\Throwable) {}
-            try { DB::statement('ALTER TABLE venues DROP CHECK chk_venues_price_tier'); } catch (\Throwable) {}
+            try {
+                DB::statement('ALTER TABLE reports DROP CHECK chk_reports_severity');
+            } catch (Throwable) {
+            }
+            try {
+                DB::statement('ALTER TABLE reports DROP CHECK chk_reports_rating');
+            } catch (Throwable) {
+            }
+            try {
+                DB::statement('ALTER TABLE venues DROP CHECK chk_venues_lighting');
+            } catch (Throwable) {
+            }
+            try {
+                DB::statement('ALTER TABLE venues DROP CHECK chk_venues_price_tier');
+            } catch (Throwable) {
+            }
         }
 
         Schema::table('reports', function (Blueprint $table) {

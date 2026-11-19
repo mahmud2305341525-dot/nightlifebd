@@ -5,7 +5,6 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\Event;
 use App\Models\EventBooking;
-use App\Models\EventTicketTier;
 use App\Models\Venue;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -42,7 +41,7 @@ class EventModerationController extends Controller
     {
         $validated = $request->validate([
             'title' => ['required', 'string', 'max:150'],
-            'category' => ['required', 'string', 'in:' . implode(',', array_keys(Event::CATEGORIES))],
+            'category' => ['required', 'string', 'in:'.implode(',', array_keys(Event::CATEGORIES))],
             'venue_id' => ['nullable', 'exists:venues,id'],
             'area' => ['required', 'string', 'max:100'],
             'address' => ['required', 'string', 'max:255'],
@@ -61,7 +60,7 @@ class EventModerationController extends Controller
 
         $event = Event::create([
             'title' => $validated['title'],
-            'slug' => Str::slug($validated['title']) . '-' . Str::random(5),
+            'slug' => Str::slug($validated['title']).'-'.Str::random(5),
             'category' => $validated['category'],
             'venue_id' => $validated['venue_id'] ?? null,
             'organizer_id' => auth()->id(),

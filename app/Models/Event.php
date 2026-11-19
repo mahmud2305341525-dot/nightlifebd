@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Support\TimeBucket;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -45,7 +46,7 @@ class Event extends Model
                 $slug = $baseSlug;
                 $counter = 1;
                 while (static::where('slug', $slug)->exists()) {
-                    $slug = $baseSlug . '-' . $counter++;
+                    $slug = $baseSlug.'-'.$counter++;
                 }
                 $event->slug = $slug;
             }
@@ -118,7 +119,7 @@ class Event extends Model
             return null;
         }
 
-        $bucket = \App\Support\TimeBucket::current();
+        $bucket = TimeBucket::current();
         $score = $this->venue->scoreFor($bucket);
 
         return $score ? (float) $score->score : null;
