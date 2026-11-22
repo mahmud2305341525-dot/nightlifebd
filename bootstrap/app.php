@@ -1,6 +1,8 @@
 <?php
 
+use App\Http\Middleware\EnsureTurnstile;
 use App\Http\Middleware\NotBanned;
+use App\Http\Middleware\RequestId;
 use App\Http\Middleware\SetLocale;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
@@ -17,13 +19,18 @@ return Application::configure(basePath: dirname(__DIR__))
     )
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->trustProxies(at: '*');
+        $middleware->validateCsrfTokens(except: [
+            'webhooks/*',
+        ]);
         $middleware->alias([
             'role' => RoleMiddleware::class,
             'permission' => PermissionMiddleware::class,
             'role_or_permission' => RoleOrPermissionMiddleware::class,
             'not_banned' => NotBanned::class,
+            'turnstile' => EnsureTurnstile::class,
         ]);
         $middleware->web(append: [SetLocale::class]);
+        $middleware->append(RequestId::class);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         //

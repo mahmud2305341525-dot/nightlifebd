@@ -22,6 +22,20 @@
             @endforeach
         </div>
 
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+            @foreach ([
+                [__('AI Calls'), $aiUsage['total'], 'text-indigo-700'],
+                [__('AI Success'), $aiUsage['success'], 'text-green-700'],
+                [__('AI Fallback'), $aiUsage['fallback'], 'text-amber-700'],
+                [__('Avg Latency'), $aiUsage['average_latency_ms'].' ms', 'text-slate-700'],
+            ] as [$label, $value, $cls])
+                <div class="rounded-xl border bg-white dark:bg-slate-900 p-3">
+                    <div class="text-xl font-bold {{ $cls }}">{{ $value }}</div>
+                    <div class="text-xs text-slate-500">{{ $label }}</div>
+                </div>
+            @endforeach
+        </div>
+
         {{-- Secondary stats --}}
         <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
             @foreach ([

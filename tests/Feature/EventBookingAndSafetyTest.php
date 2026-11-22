@@ -31,6 +31,10 @@ class EventBookingAndSafetyTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+        config([
+            'nightlife.demo_enabled' => true,
+            'nightlife.payments_driver' => 'mock',
+        ]);
 
         $this->seed(RoleSeeder::class);
 
@@ -129,7 +133,7 @@ class EventBookingAndSafetyTest extends TestCase
         $this->assertNotNull($booking);
         $this->assertEquals(2, $booking->quantity);
         $this->assertEquals(1000.00, $booking->total_price);
-        $this->assertEquals('confirmed', $booking->status);
+        $this->assertEquals('pending_payment', $booking->status);
         $this->assertNotEmpty($booking->booking_reference);
         $this->assertNotEmpty($booking->qr_token);
 
@@ -137,6 +141,14 @@ class EventBookingAndSafetyTest extends TestCase
         $this->assertEquals(2, $this->tier->fresh()->booked_count);
 
         $res->assertRedirect(route('events.bookings.show', $booking->booking_reference));
+
+        $signature = hash_hmac('sha256', (string) $booking->provider_reference, (string) config('app.key'));
+        $this->postJson(route('payments.mock.webhook'), [
+            'provider_reference' => $booking->provider_reference,
+        ], ['X-NightLifeBD-Mock-Signature' => $signature])->assertOk();
+        $booking->refresh();
+        $this->assertEquals('confirmed', $booking->status);
+        $this->assertEquals('paid', $booking->payment_status);
 
         // Follow to digital pass
         $passRes = $this->actingAs($this->user)->get(route('events.bookings.show', $booking->booking_reference));

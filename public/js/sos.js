@@ -2,6 +2,7 @@
 (function () {
     'use strict';
     var LS = 'nl_emergency', LAST = 'nl_sos_last';
+    var SOS_QUEUE = 'nl_sos_queue';
     var cfg = window.NLSOS || null;
     var data = null;
     try { data = JSON.parse(localStorage.getItem(LS) || 'null'); } catch (e) { data = null; }
@@ -35,7 +36,7 @@
         return new Promise(function (resolve) {
             if (!navigator.geolocation) return resolve(null);
             navigator.geolocation.getCurrentPosition(
-                function (p) { resolve({ lat: p.coords.latitude, lng: p.coords.longitude }); },
+                function (p) { resolve({ lat: p.coords.latitude, lng: p.coords.longitude, accuracy_m: p.coords.accuracy }); },
                 function () { resolve(null); },
                 { enableHighAccuracy: true, timeout: 8000, maximumAge: 20000 }
             );
@@ -129,6 +130,18 @@
             try {
                 var reqId = 'sos_' + Date.now() + '_' + Math.random().toString(36).substring(2, 9);
                 var payload = Object.assign({}, pos || {}, { request_id: reqId });
+                if (navigator.getBattery) {
+                    navigator.getBattery().then(function (battery) {
+                        payload.battery_percent = Math.round((battery.level || 0) * 100);
+                    }).catch(function () {});
+                }
+                if (!navigator.onLine) {
+                    var queue = JSON.parse(localStorage.getItem(SOS_QUEUE) || '[]');
+                    queue.push(payload);
+                    localStorage.setItem(SOS_QUEUE, JSON.stringify(queue.slice(-10)));
+                    statusEl.textContent += ' (Offline: SOS request queued and will retry when online.)';
+                    return;
+                }
                 var r = await fetch(cfg.endpoint, {
                     method: 'POST', credentials: 'same-origin',
                     headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'X-CSRF-TOKEN': cfg.csrf },
@@ -143,6 +156,11 @@
                     }
                 }
             } catch (e) {
+                if (cfg && typeof payload !== 'undefined') {
+                    var failedQueue = JSON.parse(localStorage.getItem(SOS_QUEUE) || '[]');
+                    failedQueue.push(payload);
+                    localStorage.setItem(SOS_QUEUE, JSON.stringify(failedQueue.slice(-10)));
+                }
                 statusEl.textContent += ' (No internet: use the SMS and call buttons.)';
             }
         } else {
@@ -150,4 +168,23 @@
         }
     }
     window.NLSOS_TRIGGER = trigger;
+    window.addEventListener('online', async function () {
+        if (!cfg) return;
+        var queue = JSON.parse(localStorage.getItem(SOS_QUEUE) || '[]');
+        if (!queue.length) return;
+        var remaining = [];
+        for (var i = 0; i < queue.length; i++) {
+            try {
+                var res = await fetch(cfg.endpoint, {
+                    method: 'POST', credentials: 'same-origin',
+                    headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'X-CSRF-TOKEN': cfg.csrf },
+                    body: JSON.stringify(queue[i])
+                });
+                if (!res.ok) remaining.push(queue[i]);
+            } catch (e) {
+                remaining.push(queue[i]);
+            }
+        }
+        localStorage.setItem(SOS_QUEUE, JSON.stringify(remaining));
+    });
 })();

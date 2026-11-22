@@ -6,6 +6,7 @@ use App\Services\IncidentPhotoService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 
@@ -94,6 +95,81 @@ class HealthController extends Controller
                 'exception' => class_basename($e),
             ]);
         }
+
+        // 4. Scheduler Heartbeat
+        $schedulerHeartbeat = Cache::get('nightlife:scheduler-heartbeat');
+        $checks['scheduler'] = $schedulerHeartbeat ? 'ok' : 'not_reported';
+
+        // 5. Queue Configuration and Pending Work
+        $queueConnection = config('queue.default');
+        if ($queueConnection === 'sync') {
+            $checks['queue'] = 'not_running';
+        } else {
+            try {
+                $pending = DB::table(config('queue.connections.database.table', 'jobs'))->count();
+                $checks['queue'] = 'ok';
+                $checks['queue_pending'] = $pending;
+            } catch (\Throwable $e) {
+                $checks['queue'] = 'unknown';
+            }
+        }
+
+        // 6. Gemini Live Status
+        if (! config('nightlife.ai_enabled')) {
+            $checks['gemini'] = 'disabled';
+        } elseif (! filled(config('services.gemini.key'))) {
+            $checks['gemini'] = 'not_configured';
+        } else {
+            try {
+                $gemini = Http::timeout(8)
+                    ->withHeaders(['x-goog-api-key' => config('services.gemini.key')])
+                    ->post('https://generativelanguage.googleapis.com/v1beta/models/'.config('services.gemini.model').':generateContent', [
+                        'contents' => [['parts' => [['text' => 'Reply OK']]]],
+                        'generationConfig' => ['maxOutputTokens' => 4, 'temperature' => 0],
+                    ]);
+                $checks['gemini'] = $gemini->successful() ? 'ok' : 'provider_failure';
+            } catch (\Throwable $e) {
+                $checks['gemini'] = 'timeout';
+            }
+        }
+
+        // 7. Routing Provider Status
+        $routingDriver = config('nightlife.routing_driver');
+        if ($routingDriver === 'ors' && filled(config('services.ors.key'))) {
+            try {
+                $route = Http::timeout(8)
+                    ->withHeaders(['Authorization' => config('services.ors.key'), 'Content-Type' => 'application/json'])
+                    ->post('https://api.openrouteservice.org/v2/directions/driving-car/geojson', [
+                        'coordinates' => [[90.4125, 23.7806], [90.4140, 23.7820]],
+                    ]);
+                $checks['routing'] = $route->successful() ? 'ok' : 'provider_failure';
+            } catch (\Throwable $e) {
+                $checks['routing'] = 'timeout';
+            }
+        } elseif ($routingDriver === 'osrm') {
+            $checks['routing'] = 'public_osrm_not_production_ready';
+        } else {
+            $checks['routing'] = 'not_configured';
+        }
+
+        // 8. Mail and Telegram State
+        $checks['mail'] = in_array(config('mail.default'), ['log', 'array'], true)
+            ? 'local_only'
+            : 'configured';
+
+        if (! filled(config('services.telegram.token'))) {
+            $checks['telegram'] = 'not_configured';
+        } else {
+            try {
+                $telegram = Http::timeout(8)->get('https://api.telegram.org/bot'.config('services.telegram.token').'/getMe');
+                $checks['telegram'] = ($telegram->successful() && $telegram->json('ok') === true)
+                    ? 'ok'
+                    : 'provider_failure';
+            } catch (\Throwable $e) {
+                $checks['telegram'] = 'timeout';
+            }
+        }
+        $checks['sms'] = 'not_configured';
 
         $statusCode = $isHealthy ? 200 : 503;
 

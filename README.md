@@ -5,7 +5,7 @@ A modern, production-hardened Laravel 12 application (installable Progressive We
 **Team Error 404** — Daffodil International University (DIU), SE331 Software Engineering Design Capstone (Fall 2026)  
 *Ridwan Mahmud (232-35-525) · Shahed Ahmed (232-35-033) · Maruf Ahmed (232-35-447)*
 
-> ⚠️ **Safety Disclaimer**: Safety information is community-sourced and AI-assisted. It is strictly advisory and never replaces emergency services (**999**). All demo records are fictional.
+> ⚠️ **Safety Disclaimer**: Safety information is community-sourced and AI-assisted. It is strictly advisory and never replaces emergency services (**999**). Fictional records exist only when demo mode is explicitly enabled.
 
 ---
 
@@ -29,14 +29,14 @@ flowchart TD
     end
 
     subgraph AIService["AI & NLP Pipeline"]
-        Gemini["Google Gemini 2.5 Flash (Cloud LLM)"]
+        Gemini["Google Gemini 3.x Flash (Cloud LLM)"]
         Local["Local Lexicon Analyzer (Offline Fallback)"]
         Eval["IncidentEvaluationService (Confusion Matrix, F1, Accuracy)"]
     end
 
     subgraph RoutingEngine["Routing & Spatial Intelligence"]
         ORS["OpenRouteService (Car & Pedestrian GeoJSON)"]
-        OSRM["Project-OSRM (Demo Fallback)"]
+        OSRM["Project-OSRM (Explicit Demo-Only Fallback)"]
         RouteScore["RouteService (~50m Sampling + 30% Detour Cap)"]
     end
 
@@ -68,7 +68,7 @@ flowchart LR
     A["User Incident Report<br/>(Bangla / English / Banglish)"] --> B["Deep Binary & Validation<br/>(500 chars max, anti-burst cooldown)"]
     B --> C["AnalyzeReportJob (Async Queue)"]
     C --> D{"Gemini API<br/>Available?"}
-    D -- Yes --> E["Gemini 2.5 Flash Structured JSON<br/>(Category, Severity 1-5, Spam Prob)"]
+    D -- Yes --> E["Gemini Structured JSON<br/>(Category, Severity 1-5, Spam Prob)"]
     D -- No / Error --> F["Local Lexicon Analyzer<br/>(Offline Dictionary & Regex Fallback)"]
     E --> G["Embeddings & Duplicate Detection<br/>(Cosine similarity &le;200m / 48h)"]
     F --> G
@@ -211,7 +211,24 @@ php artisan test --filter=Phase3NewFunctionalityTest
 - **Framework**: Laravel 12 (PHP 8.2+)
 - **Frontend**: Blade, Tailwind CSS (Dark Mode: Class), Alpine.js, Leaflet.js
 - **Typography**: Figtree (English) & Hind Siliguri / Noto Sans Bengali (Bangla)
-- **AI Integration**: Google Gemini 2.5 Flash API + Built-in Bangla/Banglish Keyword Lexicon Fallback
-- **Spatial & Maps**: OpenStreetMap, OpenRouteService API, Project-OSRM Fallback
+- **AI Integration**: Configurable Google Gemini model with a fallback model and built-in Bangla/Banglish keyword fallback
+- **Spatial & Maps**: OpenStreetMap attribution, OpenRouteService for production routing, demo-only OSRM fallback
 - **Database**: SQLite (Development & Testing) / MySQL UTF8mb4
 - **Testing**: PHPUnit 11 / Laravel Testing Framework
+
+## Real-Mode Setup
+
+1. Copy `.env.example` to `.env`, set `APP_DEBUG=false`, and generate an app key.
+2. Set `NIGHTLIFE_DEMO_ENABLED=false`.
+3. Run `php artisan migrate --force`.
+4. Run `php artisan admin:create --email=admin@example.com`.
+5. Import real public reference data:
+   ```bash
+   php artisan havens:import
+   php artisan venues:import --area="Dhaka Metropolitan"
+   ```
+6. Configure a production routing provider and SMTP/transactional mail.
+7. Run `php artisan nightlife:preflight` before traffic is enabled.
+8. Run `php artisan test`, Pint, and `npm run build` before deployment.
+
+Demo accounts, fictional venues, fictional reports, and fictional events are not seeded by `DatabaseSeeder`.

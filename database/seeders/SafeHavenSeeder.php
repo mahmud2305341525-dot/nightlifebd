@@ -74,7 +74,13 @@ class SafeHavenSeeder extends Seeder
         foreach ($rows as [$type, $name, $lat, $lng, $phone]) {
             SafeHaven::firstOrCreate(
                 ['name' => $name, 'type' => $type],
-                ['lat' => $lat, 'lng' => $lng, 'phone' => $phone]
+                [
+                    'lat' => $lat,
+                    'lng' => $lng,
+                    'phone' => $phone,
+                    'source' => 'seed_unverified',
+                    'last_verified_at' => null,
+                ]
             );
         }
 

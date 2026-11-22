@@ -43,6 +43,9 @@ class ReportAnalyzer
         }
 
         $emb = $this->embedding($report->body);
+        $safetyText = $this->scrubPersonalInfo($report->body);
+        $piiScrubbed = $safetyText !== $report->body;
+        $defamationFlagged = $this->namesOrDefamationRisk($report->body);
 
         // Update pre-triage predictions without altering report status or user permissions
         $report->fill([
@@ -52,11 +55,16 @@ class ReportAnalyzer
             'severity' => $report->severity ?: $result['severity'],
             'language' => $result['language'],
             'spam_probability' => $result['spam_probability'],
-            'summary_en' => $result['summary_en'],
+            'summary_en' => mb_substr($this->scrubPersonalInfo((string) $result['summary_en']), 0, 240),
             'embedding' => $emb['vector'],
             'embedding_source' => $emb['source'],
             'analysis_source' => $source,
-            'needs_review' => $aiFailed || $result['spam_probability'] >= 0.6 || $result['category'] === 'other',
+            'ai_suggested_category' => $result['category'],
+            'ai_suggested_severity' => $result['severity'],
+            'ai_suggested_rationale' => mb_substr($result['summary_en'], 0, 500),
+            'pii_scrubbed' => $piiScrubbed,
+            'defamation_flagged' => $defamationFlagged,
+            'needs_review' => $aiFailed || $result['spam_probability'] >= 0.6 || $result['category'] === 'other' || $defamationFlagged,
         ])->save();
 
         $this->markDuplicate($report);
@@ -148,6 +156,24 @@ PROMPT;
         ];
     }
 
+    public function scrubPersonalInfo(string $text): string
+    {
+        $text = preg_replace('/(?:\+?880|0)?1[3-9]\d{8}/u', '[phone removed]', $text);
+        $text = preg_replace('/\b[A-Z0-9]{2}[- ]?\d{2}[- ]?[A-Z]{1,2}[- ]?\d{3,6}\b/i', '[plate removed]', $text);
+        $text = preg_replace('/\b[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}\b/u', '[email removed]', $text);
+
+        return $text;
+    }
+
+    public function namesOrDefamationRisk(string $text): bool
+    {
+        $lower = mb_strtolower($text);
+        $accusatory = preg_match('/\b(caught|thief|criminal|fraud|fake|rapist|corrupt|terrorist|harasser)\b|ধর্ষক|চোর|ঠক|মিথ্যা|ভুয়া/u', $lower);
+        $namesLikely = preg_match('/\b(?:mr|mrs|ms|sir)\b\s+\w+|শ্রীমতী?\s+\p{Bengali}+/iu', $text);
+
+        return (bool) ($accusatory && $namesLikely);
+    }
+
     /** Same venue or within 200 m, in the previous 48 h, with a very similar embedding -> corroboration, not spam. */
     public function markDuplicate(Report $report): ?Report
     {
@@ -164,6 +190,12 @@ PROMPT;
             ->whereNotNull('embedding')
             ->where('created_at', '>=', $report->created_at->copy()->subHours(48))
             ->where('created_at', '<=', $report->created_at)
+            ->when($coords, function ($query) use ($coords) {
+                $query->where(function ($where) use ($coords) {
+                    $where->whereBetween('lat', [$coords[0] - 0.003, $coords[0] + 0.003])
+                        ->orWhereNotNull('venue_id');
+                });
+            })
             ->with('venue')
             ->get()
             ->filter(function (Report $c) use ($report, $coords) {

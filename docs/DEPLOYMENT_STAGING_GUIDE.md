@@ -257,3 +257,24 @@ If a deployment fails:
    php artisan up
    ```
 
+## 7. Production Runbook
+
+Before first traffic:
+
+1. Set `APP_ENV=production`, `APP_DEBUG=false`, `NIGHTLIFE_DEMO_ENABLED=false`, `NIGHTLIFE_USE_QUEUE=true`.
+2. Configure Redis for session, cache, and queue.
+3. Configure a real SMTP/transactional mail driver.
+4. Rotate Gemini and ORS credentials; set `GEMINI_MODEL` and `GEMINI_FALLBACK_MODEL`.
+5. Run imports in order:
+   ```bash
+   php artisan havens:import
+   php artisan venues:import --area="Dhaka Metropolitan"
+   php artisan admin:create --email=admin@example.com
+   php artisan migrate --force
+   php artisan nightlife:preflight
+   ```
+6. Install `deployment/cron` and `deployment/nightlifebd-worker.conf`.
+7. Test `/health` with a load balancer; alert if it returns 503.
+8. Test database restore and private-photo restore before launch.
+9. Set up uptime monitoring, structured-log export, and at least one real SMTP/alert channel.
+

@@ -330,6 +330,7 @@
                                 <label class="text-xs font-semibold text-slate-700 dark:text-slate-300 block mb-1">
                                     {{ __('Checkout Method') }}:
                                 </label>
+                                @if (config('nightlife.demo_enabled') && config('nightlife.payments_driver') === 'mock')
                                 <div class="grid grid-cols-3 gap-2 text-center text-xs">
                                     <label class="p-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 hover:border-indigo-500 cursor-pointer block">
                                         <input type="radio" name="payment_method" value="mock_bkash" checked class="sr-only peer">
@@ -353,6 +354,12 @@
                                         </div>
                                     </label>
                                 </div>
+                                @else
+                                    <div class="p-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs text-slate-600 dark:text-slate-300">
+                                        {{ __('Paid ticketing is not enabled. Only free events can be booked.') }}
+                                        <input type="hidden" name="payment_method" value="free">
+                                    </div>
+                                @endif
                             </div>
 
                             {{-- Submit Button --}}

@@ -11,6 +11,7 @@
                 <button type="button" id="copy" class="border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 rounded-md px-3 text-xs transition">{{ __('Copy') }}</button>
             </div>
             <div id="state" class="text-slate-600 dark:text-slate-400"></div>
+            <button type="button" id="wake-lock" class="w-full border border-indigo-300 text-indigo-700 rounded-md py-2 text-sm font-semibold">{{ __('Keep screen on') }}</button>
             <p class="text-xs text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 p-2.5 rounded-lg">{{ __('Keep this tab open. Browsers stop sending location when the tab is closed or the screen is off for a long time.') }}</p>
         </div>
         <div id="map" style="height:300px" class="rounded-xl border border-slate-300 dark:border-slate-700 z-0"></div>
@@ -24,6 +25,19 @@
             let me = null;
             const state = document.getElementById('state');
             document.getElementById('copy').onclick = () => { navigator.clipboard && navigator.clipboard.writeText(document.getElementById('link').value); };
+            let wakeLock = null;
+            document.getElementById('wake-lock').onclick = async () => {
+                try {
+                    if (!('wakeLock' in navigator)) {
+                        state.textContent = @json(__('Wake Lock is unavailable. Keep this tab open and the screen on.'));
+                        return;
+                    }
+                    wakeLock = await navigator.wakeLock.request('screen');
+                    state.textContent = @json(__('Screen wake lock enabled.'));
+                } catch (e) {
+                    state.textContent = @json(__('Wake Lock could not be enabled.'));
+                }
+            };
             async function send(p) {
                 const r = await NL.post('{{ route('trips.ping', $trip->token) }}', { lat: p.lat, lng: p.lng });
                 state.textContent = r.ok ? '{{ __('Location shared') }}: ' + new Date().toLocaleTimeString() : (r.status === 410 ? @json(__('Trip expired')) : @json(__('Could not send location')));

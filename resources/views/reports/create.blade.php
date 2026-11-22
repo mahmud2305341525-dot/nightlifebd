@@ -106,6 +106,11 @@
             </div>
 
             <p class="text-xs text-slate-500 dark:text-slate-400">{{ __('AI will read your report, classify it and check for duplicates. A moderator verifies it before it changes any safety score.') }}</p>
+            @if (config('services.turnstile.site_key'))
+                @push('head')<script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>@endpush
+                <div class="cf-turnstile" data-sitekey="{{ config('services.turnstile.site_key') }}"></div>
+                <x-input-error :messages="$errors->get('captcha')" />
+            @endif
             <button class="w-full bg-indigo-600 hover:bg-indigo-500 text-white rounded-md py-2.5 font-semibold transition">{{ __('Submit report') }}</button>
         </form>
     </div>

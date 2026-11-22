@@ -18,6 +18,7 @@ class Venue extends Model
         return [
             'lat' => 'float',
             'lng' => 'float',
+            'lighting' => 'integer',
             'has_cctv' => 'boolean',
             'has_guard' => 'boolean',
             'is_restricted' => 'boolean',
@@ -68,6 +69,11 @@ class Venue extends Model
     public function favoritedBy(): BelongsToMany
     {
         return $this->belongsToMany(User::class, 'venue_favorites')->withPivot('created_at');
+    }
+
+    public function claims(): HasMany
+    {
+        return $this->hasMany(VenueClaim::class);
     }
 
     /** Verified reviews with a star rating for this venue. */

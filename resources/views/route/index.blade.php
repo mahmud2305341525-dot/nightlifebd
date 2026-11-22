@@ -88,7 +88,7 @@
             {{-- Pareto Comparison Panel --}}
             <div id="result" class="hidden space-y-3"></div>
 
-            <p class="text-xs text-slate-500 dark:text-slate-400">{{ __('Bangladesh has no open crime dataset, so risk comes from community-verified reports plus OpenStreetMap help points. Routing: OpenRouteService / OSRM. Advisory only.') }}</p>
+            <p class="text-xs text-slate-500 dark:text-slate-400">{{ __('Routing providers are advisory only. Production uses the configured provider and does not silently replace walking routes with driving geometry. Map data © OpenStreetMap contributors.') }}</p>
         </div>
         <div class="lg:col-span-2">
             <div id="map" style="height:620px" class="rounded-xl border border-slate-300 dark:border-slate-700 z-0"></div>

@@ -108,6 +108,10 @@ class ReportController extends Controller
                             'path' => $processed['path'],
                             'thumbnail' => $processed['thumbnail'],
                             'size_bytes' => $processed['size_bytes'],
+                            'ai_relevance' => $processed['ai_relevance'] ?? 'unknown',
+                            'ai_faces_blur_suggested' => $processed['ai_faces_blur_suggested'] ?? false,
+                            'ai_explicit_flagged' => $processed['ai_explicit_flagged'] ?? false,
+                            'ai_advice' => $processed['ai_advice'] ?? null,
                             'created_at' => now(),
                         ]);
                     }

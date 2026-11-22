@@ -2,6 +2,8 @@
 
 namespace App\Services;
 
+use App\Contracts\SmsChannel;
+use App\Models\AlertDelivery;
 use App\Models\User;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
@@ -17,6 +19,8 @@ use Illuminate\Support\Facades\Mail;
  */
 class AlertService
 {
+    public function __construct(private SmsChannel $sms) {}
+
     /**
      * @return array{
      *     contacts_count: int,
@@ -43,6 +47,13 @@ class AlertService
             'failed' => 0,
             'message' => null,
         ];
+        $smsResult = [
+            'status' => 'not_configured',
+            'attempted' => 0,
+            'confirmed' => 0,
+            'failed' => 0,
+            'message' => null,
+        ];
 
         $isLocalMail = (config('mail.default') === 'log');
         $emailResult = [
@@ -63,6 +74,7 @@ class AlertService
                 'delivery' => [
                     'telegram' => $telegramResult,
                     'email' => $emailResult,
+                    'sms' => $smsResult,
                 ],
                 'summary' => __('No emergency contacts configured.'),
                 'is_simulation' => false,
@@ -78,8 +90,24 @@ class AlertService
                 try {
                     Mail::raw($message, fn ($m) => $m->to($c->email)->subject($subject));
                     $emailResult['confirmed']++;
+                    AlertDelivery::create([
+                        'user_id' => $user->id,
+                        'emergency_contact_id' => $c->id,
+                        'channel' => 'email',
+                        'status' => $isLocalMail ? 'logged_local' : 'confirmed',
+                        'attempted_at' => now(),
+                        'confirmed_at' => $isLocalMail ? null : now(),
+                    ]);
                 } catch (\Throwable $e) {
                     $emailResult['failed']++;
+                    AlertDelivery::create([
+                        'user_id' => $user->id,
+                        'emergency_contact_id' => $c->id,
+                        'channel' => 'email',
+                        'status' => 'failed',
+                        'error' => mb_substr($e->getMessage(), 0, 1000),
+                        'attempted_at' => now(),
+                    ]);
                     Log::warning('Alert email failed: '.$e->getMessage());
                 }
             }
@@ -95,17 +123,76 @@ class AlertService
                         ]);
                         if ($res->successful() && ($res->json('ok') === true)) {
                             $telegramResult['confirmed']++;
+                            AlertDelivery::create([
+                                'user_id' => $user->id,
+                                'emergency_contact_id' => $c->id,
+                                'channel' => 'telegram',
+                                'provider_message_id' => is_numeric($res->json('result.message_id')) ? (string) $res->json('result.message_id') : null,
+                                'status' => 'confirmed',
+                                'attempted_at' => now(),
+                                'confirmed_at' => now(),
+                            ]);
                         } else {
                             $telegramResult['failed']++;
+                            AlertDelivery::create([
+                                'user_id' => $user->id,
+                                'emergency_contact_id' => $c->id,
+                                'channel' => 'telegram',
+                                'status' => 'failed',
+                                'error' => 'HTTP '.$res->status(),
+                                'attempted_at' => now(),
+                            ]);
                             Log::warning('Alert Telegram rejected by API: '.$res->status());
                         }
                     } catch (\Throwable $e) {
                         $telegramResult['failed']++;
                         Log::warning('Alert Telegram connection failed: '.$e->getMessage());
+                        AlertDelivery::create([
+                            'user_id' => $user->id,
+                            'emergency_contact_id' => $c->id,
+                            'channel' => 'telegram',
+                            'status' => 'failed',
+                            'error' => mb_substr($e->getMessage(), 0, 1000),
+                            'attempted_at' => now(),
+                        ]);
                     }
                 } else {
                     $telegramResult['status'] = 'token_missing';
                 }
+            }
+        }
+
+        foreach ($contacts as $c) {
+            if (! filled($c->phone)) {
+                continue;
+            }
+            $smsResult['attempted']++;
+            $sms = $this->sms->send($c->phone, $subject."\n\n".$message);
+            if ($sms['status'] === 'accepted') {
+                $smsResult['confirmed']++;
+                $smsResult['status'] = 'accepted';
+                AlertDelivery::create([
+                    'user_id' => $user->id,
+                    'emergency_contact_id' => $c->id,
+                    'channel' => 'sms',
+                    'provider_message_id' => $sms['provider_message_id'] ?: null,
+                    'status' => 'accepted',
+                    'attempted_at' => now(),
+                ]);
+            } elseif ($sms['status'] === 'not_configured') {
+                $smsResult['status'] = 'not_configured';
+                $smsResult['message'] = __('SMS provider is not configured.');
+            } else {
+                $smsResult['failed']++;
+                $smsResult['status'] = 'failed';
+                AlertDelivery::create([
+                    'user_id' => $user->id,
+                    'emergency_contact_id' => $c->id,
+                    'channel' => 'sms',
+                    'status' => 'failed',
+                    'error' => $sms['error'] ?? null,
+                    'attempted_at' => now(),
+                ]);
             }
         }
 
@@ -137,7 +224,7 @@ class AlertService
             }
         }
 
-        $isSimulation = ($isLocalMail && $telegramResult['confirmed'] === 0);
+        $isSimulation = ($isLocalMail && $telegramResult['confirmed'] === 0 && $smsResult['confirmed'] === 0);
 
         // Build human-readable status summary
         $parts = [];
@@ -149,8 +236,11 @@ class AlertService
                 ? __('Email: :n logged locally (dev mode)', ['n' => $emailResult['confirmed']])
                 : __('Email: :n sent', ['n' => $emailResult['confirmed']]);
         }
-        if ($telegramResult['failed'] > 0 || $emailResult['failed'] > 0) {
-            $parts[] = __('Failed: :n', ['n' => ($telegramResult['failed'] + $emailResult['failed'])]);
+        if ($smsResult['confirmed'] > 0) {
+            $parts[] = __('SMS: :n accepted', ['n' => $smsResult['confirmed']]);
+        }
+        if ($telegramResult['failed'] > 0 || $emailResult['failed'] > 0 || $smsResult['failed'] > 0) {
+            $parts[] = __('Failed: :n', ['n' => ($telegramResult['failed'] + $emailResult['failed'] + $smsResult['failed'])]);
         }
 
         $summary = ! empty($parts)
@@ -165,6 +255,7 @@ class AlertService
             'delivery' => [
                 'telegram' => $telegramResult,
                 'email' => $emailResult,
+                'sms' => $smsResult,
             ],
             'summary' => $summary,
             'is_simulation' => $isSimulation,

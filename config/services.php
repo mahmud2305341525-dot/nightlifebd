@@ -17,6 +17,7 @@ return [
     'gemini' => [
         'key' => env('GEMINI_API_KEY'),
         'model' => env('GEMINI_MODEL', 'gemini-3.8-flash'),
+        'fallback_model' => env('GEMINI_FALLBACK_MODEL', 'gemini-3.5-flash-lite'),
         'embed_model' => env('GEMINI_EMBED_MODEL', 'gemini-embedding-001'),
     ],
 
@@ -26,6 +27,17 @@ return [
 
     'telegram' => [
         'token' => env('TELEGRAM_BOT_TOKEN'),
+        'username' => env('TELEGRAM_BOT_USERNAME'),
+    ],
+    'sms' => [
+        'driver' => env('SMS_DRIVER', 'http'),
+        'endpoint' => env('SMS_HTTP_ENDPOINT'),
+        'token' => env('SMS_HTTP_TOKEN'),
+        'sender' => env('SMS_SENDER_ID'),
+    ],
+    'turnstile' => [
+        'site_key' => env('TURNSTILE_SITE_KEY'),
+        'secret' => env('TURNSTILE_SECRET'),
     ],
 
     'postmark' => [

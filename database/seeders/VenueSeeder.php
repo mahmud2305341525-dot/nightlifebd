@@ -50,6 +50,10 @@ class VenueSeeder extends Seeder
                     'has_cctv' => $cctv, 'has_guard' => $guard, 'lighting' => $light,
                     'is_restricted' => false, 'status' => 'approved',
                     'vibe_tags' => $tags, 'description' => $desc.' (Fictional demo venue.)',
+                    'source' => 'demo',
+                    'source_id' => 'demo/venue/'.$i.'-'.$k,
+                    'verification_level' => 'demo',
+                    'imported_at' => now(),
                 ]);
                 $i++;
             }
@@ -61,6 +65,7 @@ class VenueSeeder extends Seeder
                 'owner_id' => $owner?->id, 'name' => 'Velvet Lounge '.($n + 1)." ({$a})", 'category' => 'lounge', 'area' => $a, 'price_tier' => 3,
                 'lat' => $la, 'lng' => $ln, 'opens_at' => '19:00', 'closes_at' => '02:00', 'has_cctv' => true, 'has_guard' => true, 'lighting' => 4,
                 'is_restricted' => true, 'status' => 'approved', 'vibe_tags' => 'music,quiet', 'description' => 'Age-restricted lounge. (Fictional demo venue.)',
+                'source' => 'demo', 'source_id' => 'demo/lounge/'.$n, 'verification_level' => 'demo', 'imported_at' => now(),
             ]);
         }
     }

@@ -10,6 +10,15 @@ return [
     | Never automatically enabled by local environment or APP_DEBUG alone.
     */
     'demo_enabled' => (bool) env('NIGHTLIFE_DEMO_ENABLED', false),
+    'use_queue' => (bool) env('NIGHTLIFE_USE_QUEUE', false),
+    'ai_enabled' => (bool) env('NIGHTLIFE_AI_ENABLED', true),
+    'ai_circuit_failures' => (int) env('NIGHTLIFE_AI_CIRCUIT_FAILURES', 3),
+    'ai_circuit_minutes' => (int) env('NIGHTLIFE_AI_CIRCUIT_MINUTES', 10),
+    'duplicate_vector_store' => env('NIGHTLIFE_DUPLICATE_VECTOR_STORE', 'sql'),
+    'require_real_mail' => (bool) env('NIGHTLIFE_REQUIRE_REAL_MAIL', false),
+    'require_sms' => (bool) env('NIGHTLIFE_REQUIRE_SMS', false),
+    'payments_driver' => env('NIGHTLIFE_PAYMENTS_DRIVER', 'mock'),
+    'routing_driver' => env('NIGHTLIFE_ROUTING_DRIVER', 'ors'),
 
     /*
     |--------------------------------------------------------------------------

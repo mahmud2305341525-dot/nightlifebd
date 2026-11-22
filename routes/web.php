@@ -15,13 +15,16 @@ use App\Http\Controllers\LocaleController;
 use App\Http\Controllers\Partner;
 use App\Http\Controllers\PlannerController;
 use App\Http\Controllers\ProfileController;
+use App\Http\Controllers\ReportAppealController;
 use App\Http\Controllers\ReportController;
 use App\Http\Controllers\ReportFlagController;
 use App\Http\Controllers\ReportPhotoController;
 use App\Http\Controllers\RouteController;
 use App\Http\Controllers\SafetyController;
+use App\Http\Controllers\TakedownRequestController;
 use App\Http\Controllers\TimerController;
 use App\Http\Controllers\TripController;
+use App\Http\Controllers\VenueClaimController;
 use App\Http\Controllers\VenueController;
 use App\Http\Middleware\EnsureDemoMode;
 use Illuminate\Support\Facades\Route;
@@ -32,15 +35,21 @@ Route::view('/', 'welcome')->name('home');
 Route::get('/lang/{locale}', LocaleController::class)->name('lang');
 Route::view('/offline', 'offline')->name('offline');
 Route::view('/how-it-works', 'how-it-works')->name('how-it-works');
+Route::get('/legal/takedown', [TakedownRequestController::class, 'create'])->name('legal.takedown');
+Route::post('/legal/takedown', [TakedownRequestController::class, 'store'])->middleware('turnstile')->name('legal.takedown.store');
+Route::post('/webhooks/telegram', [EmergencyContactController::class, 'telegramWebhook'])->name('webhooks.telegram');
+Route::post('/webhooks/payments/mock', [EventBookingController::class, 'mockWebhook'])->name('payments.mock.webhook');
 
 Route::get('/venues', [VenueController::class, 'index'])->name('venues.index');
 Route::get('/venues/{venue}', [VenueController::class, 'show'])->whereNumber('venue')->name('venues.show');
+Route::post('/venues/{venue}/claim', [VenueClaimController::class, 'store'])->middleware(['auth', 'not_banned'])->whereNumber('venue')->name('venues.claim');
 
 Route::get('/events', [EventController::class, 'index'])->name('events.index');
 Route::get('/events/{event:slug}', [EventController::class, 'show'])->name('events.show');
 
 Route::get('/route', [RouteController::class, 'index'])->name('route.index');
 Route::post('/route/compute', [RouteController::class, 'compute'])->middleware('throttle:20,1')->name('route.compute');
+Route::post('/route/geocode-assist', [RouteController::class, 'geocodeAssist'])->middleware('throttle:10,1')->name('route.geocode');
 
 Route::get('/heatmap', [HeatmapController::class, 'index'])->name('heatmap.index');
 Route::get('/api/heat', [HeatmapController::class, 'data'])->middleware('throttle:60,1')->name('api.heat');
@@ -59,6 +68,7 @@ Route::get('/reports/photos/{photo}/{variant?}', [ReportPhotoController::class, 
 
 // live trip link that a contact opens (secret 40-character token, expires automatically)
 Route::get('/track/{trip:token}', [TripController::class, 'track'])->middleware('throttle:60,1')->name('track.show');
+Route::post('/track/{trip:token}/pin', [TripController::class, 'verifyPin'])->middleware('throttle:10,1')->name('track.pin');
 Route::get('/track/{trip:token}/data', [TripController::class, 'trackData'])->middleware('throttle:60,1')->name('track.data');
 
 /* ---------- signed-in users ---------- */
@@ -74,16 +84,18 @@ Route::middleware(['auth', 'not_banned'])->group(function () {
     Route::post('/venues/{venue}/favorite', [VenueController::class, 'toggleFavorite'])->whereNumber('venue')->name('venues.favorite');
 
     Route::get('/contacts', [EmergencyContactController::class, 'index'])->name('contacts.index');
-    Route::post('/contacts', [EmergencyContactController::class, 'store'])->name('contacts.store');
+    Route::post('/contacts', [EmergencyContactController::class, 'store'])->middleware(['verified', 'turnstile'])->name('contacts.store');
+    Route::post('/contacts/{contact}/telegram-link', [EmergencyContactController::class, 'telegramLink'])->whereNumber('contact')->name('contacts.telegram-link');
     Route::delete('/contacts/{contact}', [EmergencyContactController::class, 'destroy'])->name('contacts.destroy');
 
     Route::get('/reports/create', [ReportController::class, 'create'])->name('reports.create');
-    Route::post('/reports', [ReportController::class, 'store'])->middleware('throttle:10,1')->name('reports.store');
+    Route::post('/reports', [ReportController::class, 'store'])->middleware(['throttle:10,1', 'verified', 'turnstile'])->name('reports.store');
     Route::get('/my-reports', [ReportController::class, 'mine'])->name('reports.mine');
     Route::get('/reports/{report}/edit', [ReportController::class, 'edit'])->whereNumber('report')->name('reports.edit');
     Route::put('/reports/{report}', [ReportController::class, 'update'])->whereNumber('report')->name('reports.update');
     Route::delete('/reports/{report}', [ReportController::class, 'destroy'])->whereNumber('report')->name('reports.destroy');
-    Route::post('/reports/{report}/flag', [ReportFlagController::class, 'store'])->whereNumber('report')->name('reports.flag');
+    Route::post('/reports/{report}/flag', [ReportFlagController::class, 'store'])->middleware(['verified', 'turnstile'])->whereNumber('report')->name('reports.flag');
+    Route::post('/reports/{report}/appeal', [ReportAppealController::class, 'store'])->middleware(['verified', 'turnstile'])->whereNumber('report')->name('reports.appeal');
     Route::post('/dark-spots', [DarkSpotController::class, 'store'])->middleware('throttle:10,1')->name('dark-spots.store');
 
     Route::get('/sos', [SafetyController::class, 'sosPage'])->name('sos.index');
@@ -125,12 +137,20 @@ Route::middleware(['auth', 'not_banned', 'role:venue_partner|super_admin'])->pre
     Route::post('/reports/{report}/responses', [Partner\ReportResponseController::class, 'store'])->whereNumber('report')->name('responses.store');
 });
 
+Route::middleware(['auth', 'not_banned', 'role:event_organizer|super_admin'])->prefix('partner/events')->name('partner.events.')->group(function () {
+    Route::get('/submit', [Partner\EventSubmissionController::class, 'create'])->name('create');
+    Route::post('/submit', [Partner\EventSubmissionController::class, 'store'])->name('store');
+});
+
 /* ---------- moderators ---------- */
 Route::middleware(['auth', 'not_banned', 'role:safety_admin|super_admin'])->prefix('admin')->name('admin.')->group(function () {
     Route::get('/', Admin\DashboardController::class)->name('dashboard');
     Route::get('/venues', [Admin\VenueModerationController::class, 'index'])->name('venues');
     Route::post('/venues/{venue}/approve', [Admin\VenueModerationController::class, 'approve'])->name('venues.approve');
     Route::post('/venues/{venue}/reject', [Admin\VenueModerationController::class, 'reject'])->name('venues.reject');
+    Route::get('/venue-claims', [Admin\VenueClaimModerationController::class, 'index'])->name('venue-claims.index');
+    Route::post('/venue-claims/{claim}/approve', [Admin\VenueClaimModerationController::class, 'approve'])->name('venue-claims.approve');
+    Route::post('/venue-claims/{claim}/reject', [Admin\VenueClaimModerationController::class, 'reject'])->name('venue-claims.reject');
 
     Route::get('/reports', [Admin\ReportModerationController::class, 'index'])->name('reports');
     Route::post('/reports/{report}/verify', [Admin\ReportModerationController::class, 'verify'])->name('reports.verify');
@@ -144,8 +164,15 @@ Route::middleware(['auth', 'not_banned', 'role:safety_admin|super_admin'])->pref
     Route::post('/flags/{flag}/dismiss', [Admin\ReportFlagModerationController::class, 'dismiss'])->name('flags.dismiss');
     Route::post('/flags/{flag}/resolve', [Admin\ReportFlagModerationController::class, 'resolve'])->name('flags.resolve');
 
+    Route::get('/evidence-assistant', [Admin\EvidenceAssistantController::class, 'index'])->name('evidence-assistant.index');
+    Route::post('/evidence-assistant', [Admin\EvidenceAssistantController::class, 'store'])->name('evidence-assistant.store');
+    Route::post('/evidence-assistant/{candidate}/approve', [Admin\EvidenceAssistantController::class, 'approve'])->name('evidence-assistant.approve');
+    Route::post('/evidence-assistant/{candidate}/reject', [Admin\EvidenceAssistantController::class, 'reject'])->name('evidence-assistant.reject');
+
     /* Event Moderation & Scanner */
     Route::get('/events', [Admin\EventModerationController::class, 'index'])->name('events.index');
+    Route::post('/events/{event}/approve', [Admin\EventModerationController::class, 'approve'])->name('events.approve');
+    Route::post('/events/{event}/reject', [Admin\EventModerationController::class, 'reject'])->name('events.reject');
     Route::get('/events/create', [Admin\EventModerationController::class, 'create'])->name('events.create');
     Route::post('/events', [Admin\EventModerationController::class, 'store'])->name('events.store');
     Route::get('/events/scanner', [Admin\EventModerationController::class, 'scanner'])->name('events.scanner');

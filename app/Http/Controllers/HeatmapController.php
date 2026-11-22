@@ -20,11 +20,32 @@ class HeatmapController extends Controller
     {
         $hour = $request->has('hour') ? (int) $request->input('hour') : null;
         $bucket = $hour !== null ? TimeBucket::fromHour($hour) : TimeBucket::normalize($request->input('bucket'));
+        $bounds = $request->validate([
+            'north' => ['nullable', 'numeric', 'between:-90,90'],
+            'south' => ['nullable', 'numeric', 'between:-90,90'],
+            'east' => ['nullable', 'numeric', 'between:-180,180'],
+            'west' => ['nullable', 'numeric', 'between:-180,180'],
+            'since' => ['nullable', 'date'],
+            'limit' => ['nullable', 'integer', 'between:1,1000'],
+        ]);
+        $limit = (int) ($bounds['limit'] ?? 500);
         $points = [];
         $incidents = [];
 
-        Report::verified()->whereNull('duplicate_of')->where('category', '!=', 'positive')
-            ->with(['user:id,trust_score', 'venue:id,lat,lng'])->get()
+        $reportQuery = Report::verified()->whereNull('duplicate_of')->where('category', '!=', 'positive')
+            ->with(['user:id,trust_score', 'venue:id,lat,lng']);
+        if (isset($bounds['since'])) {
+            $reportQuery->where('incident_time', '>=', now()->parse($bounds['since']));
+        }
+        if (isset($bounds['north'], $bounds['south'], $bounds['east'], $bounds['west'])) {
+            $reportQuery->where(function ($query) use ($bounds) {
+                $query->whereBetween('lat', [(float) $bounds['south'], (float) $bounds['north']])
+                    ->whereBetween('lng', [(float) $bounds['west'], (float) $bounds['east']])
+                    ->orWhereNotNull('venue_id');
+            });
+        }
+        $reportQuery->limit($limit)
+            ->get()
             ->each(function (Report $r) use ($bucket, &$points, &$incidents) {
                 $c = $r->coords();
                 if (! $c) {
@@ -46,7 +67,12 @@ class HeatmapController extends Controller
             });
 
         $darkSpots = [];
-        DarkSpot::all(['lat', 'lng'])->each(function ($d) use (&$points, &$darkSpots) {
+        $darkQuery = DarkSpot::query();
+        if (isset($bounds['north'], $bounds['south'], $bounds['east'], $bounds['west'])) {
+            $darkQuery->whereBetween('lat', [(float) $bounds['south'], (float) $bounds['north']])
+                ->whereBetween('lng', [(float) $bounds['west'], (float) $bounds['east']]);
+        }
+        $darkQuery->limit($limit)->get(['lat', 'lng'])->each(function ($d) use (&$points, &$darkSpots) {
             $darkSpots[] = ['lat' => round($d->lat, 5), 'lng' => round($d->lng, 5)];
             $points[] = [round($d->lat, 5), round($d->lng, 5), 0.5];
         });
@@ -61,17 +87,32 @@ class HeatmapController extends Controller
     }
 
     /** Live incident feed — last 2 hours of verified reports for the dashboard. */
-    public function feed()
+    public function feed(Request $request)
     {
-        $since = now()->subHours(2);
+        $data = $request->validate([
+            'north' => ['nullable', 'numeric', 'between:-90,90'],
+            'south' => ['nullable', 'numeric', 'between:-90,90'],
+            'east' => ['nullable', 'numeric', 'between:-180,180'],
+            'west' => ['nullable', 'numeric', 'between:-180,180'],
+            'hours' => ['nullable', 'integer', 'between:1,168'],
+            'limit' => ['nullable', 'integer', 'between:1,100'],
+        ]);
+        $since = now()->subHours((int) ($data['hours'] ?? 2));
 
         $reports = Report::verified()
             ->whereNull('duplicate_of')
             ->where('category', '!=', 'positive')
             ->where('incident_time', '>=', $since)
             ->with(['venue:id,name,area', 'user:id,trust_score'])
+            ->when(isset($data['north'], $data['south'], $data['east'], $data['west']), function ($query) use ($data) {
+                $query->where(function ($where) use ($data) {
+                    $where->whereBetween('lat', [(float) $data['south'], (float) $data['north']])
+                        ->whereBetween('lng', [(float) $data['west'], (float) $data['east']])
+                        ->orWhereNotNull('venue_id');
+                });
+            })
             ->orderByDesc('incident_time')
-            ->limit(20)
+            ->limit((int) ($data['limit'] ?? 20))
             ->get();
 
         $categoryLabels = [

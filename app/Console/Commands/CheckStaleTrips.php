@@ -49,7 +49,7 @@ class CheckStaleTrips extends Command
 
             $sent = $alerts->notifyContacts($user, 'NightLifeBD live trip safety alert', $msg);
 
-            $trip->update(['stale_alerted_at' => now()]);
+            $trip->update(['stale_alerted_at' => now(), 'low_confidence' => true]);
 
             AuditLog::record($user->id, 'trip.stale_alerted', [
                 'trip_id' => $trip->id,

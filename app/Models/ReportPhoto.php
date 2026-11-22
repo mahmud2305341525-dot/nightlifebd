@@ -15,7 +15,11 @@ class ReportPhoto extends Model
 
     protected function casts(): array
     {
-        return ['created_at' => 'datetime'];
+        return [
+            'created_at' => 'datetime',
+            'ai_faces_blur_suggested' => 'boolean',
+            'ai_explicit_flagged' => 'boolean',
+        ];
     }
 
     protected static function booted(): void

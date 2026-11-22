@@ -147,6 +147,7 @@ P);
             ->when(! $adult, fn ($q) => $q->where('is_restricted', false))
             ->when($f['area'], fn ($q, $a) => $q->where('area', 'like', '%'.trim($a).'%'))
             ->get();
+        $venues = $venues->filter(fn (Venue $venue) => $this->isOpenAt($venue, (int) $f['hour']));
 
         // Prefer safe/moderate venues; if an area is currently under incident caution,
         // keep the highest-scoring venues with caution alerts rather than returning an empty screen.
@@ -167,6 +168,21 @@ P);
             ->sortByDesc('rank')
             ->take(12)
             ->values();
+    }
+
+    private function isOpenAt(Venue $venue, int $hour): bool
+    {
+        if (! $venue->opens_at || ! $venue->closes_at) {
+            return true;
+        }
+        $open = (int) substr((string) $venue->opens_at, 0, 2);
+        $close = (int) substr((string) $venue->closes_at, 0, 2);
+
+        if ($close < $open) {
+            return $hour >= $open || $hour < $close;
+        }
+
+        return $hour >= $open && $hour < $close;
     }
 
     public function stopCost(Venue $v, int $group): int

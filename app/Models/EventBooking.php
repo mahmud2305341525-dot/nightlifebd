@@ -32,7 +32,8 @@ class EventBooking extends Model
                 $booking->booking_reference = 'NL-EVT-'.strtoupper(Str::random(6));
             }
             if (empty($booking->qr_token)) {
-                $booking->qr_token = hash('sha256', Str::random(40).microtime(true));
+                $payload = ($booking->booking_reference ?? '').'|'.(string) ($booking->event_id ?? '').'|'.(string) ($booking->ticket_tier_id ?? '');
+                $booking->qr_token = hash_hmac('sha256', $payload, (string) config('app.key'));
             }
         });
     }

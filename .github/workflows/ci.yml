@@ -95,6 +95,9 @@ jobs:
       - name: Execute PHPUnit Smoke Testsuite (User Journeys)
         run: composer test:smoke
 
+      - name: Run NightLifeBD preflight
+        run: php artisan nightlife:preflight
+
       - name: Run AI Classification Evaluation Gate
         run: php artisan ai:evaluate
 

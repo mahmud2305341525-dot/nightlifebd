@@ -13,6 +13,10 @@
             </div>
             <input name="destination" placeholder="{{ __('Destination') }}" value="{{ old('destination') }}" class="w-full border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 rounded-md text-sm">
             <input name="vehicle_plate" placeholder="{{ __('Vehicle plate (rides) e.g. DHAKA METRO-GA 12-3456') }}" value="{{ old('vehicle_plate') }}" class="w-full border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 rounded-md text-sm">
+            <div class="grid grid-cols-2 gap-2">
+                <input name="share_pin" inputmode="numeric" maxlength="8" placeholder="{{ __('Optional 4-8 digit PIN') }}" value="{{ old('share_pin') }}" class="border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-md text-sm">
+                <input name="max_views" type="number" min="1" max="100" placeholder="{{ __('Optional max views') }}" value="{{ old('max_views') }}" class="border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-md text-sm">
+            </div>
             <label class="block text-slate-800 dark:text-slate-200">{{ __('Share for') }}
                 <select name="duration" class="mt-1 w-full border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 rounded-md text-sm">
                     @foreach ([15, 30, 45, 60, 90, 120, 180] as $m)<option value="{{ $m }}" @selected(old('duration', 60) == $m)>{{ $m }} {{ __('minutes') }}</option>@endforeach
