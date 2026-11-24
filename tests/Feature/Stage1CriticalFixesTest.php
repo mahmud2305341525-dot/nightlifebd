@@ -6,7 +6,7 @@ use App\Models\AuditLog;
 use App\Models\EmergencyContact;
 use App\Models\Report;
 use App\Models\User;
-use App\Models\Venue;
+use App\Services\GeminiService;
 use App\Services\ReportAnalyzer;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
@@ -260,26 +260,29 @@ class Stage1CriticalFixesTest extends TestCase
             $url = $request->url();
             if (str_contains($url, 'gemini-3.8-flash')) {
                 $attemptedModels[] = 'gemini-3.8-flash';
+
                 return Http::response(['error' => ['message' => 'Primary overloaded']], 503);
             }
             if (str_contains($url, 'gemini-3.5-flash-lite')) {
                 $attemptedModels[] = 'gemini-3.5-flash-lite';
+
                 return Http::response([
                     'candidates' => [
                         [
                             'content' => [
                                 'parts' => [
-                                    ['text' => '{"category":"theft","severity":4,"language":"en","spam_probability":0.05,"summary_en":"Theft incident"}']
-                                ]
-                            ]
-                        ]
-                    ]
+                                    ['text' => '{"category":"theft","severity":4,"language":"en","spam_probability":0.05,"summary_en":"Theft incident"}'],
+                                ],
+                            ],
+                        ],
+                    ],
                 ], 200);
             }
+
             return Http::response('Not Found', 404);
         });
 
-        $gemini = app(\App\Services\GeminiService::class);
+        $gemini = app(GeminiService::class);
         $result = $gemini->json('User report text');
 
         $this->assertNotNull($result);
@@ -300,16 +303,18 @@ class Stage1CriticalFixesTest extends TestCase
             if (str_contains($request->url(), 'models/gemini-embedding-001:embedContent')) {
                 $endpointHit = true;
                 $this->assertSame(256, $request['outputDimensionality']);
+
                 return Http::response([
                     'embedding' => [
                         'values' => array_fill(0, 256, 0.123),
                     ],
                 ], 200);
             }
+
             return Http::response('Not Found', 404);
         });
 
-        $gemini = app(\App\Services\GeminiService::class);
+        $gemini = app(GeminiService::class);
         $vector = $gemini->embed('Sample incident text');
 
         $this->assertTrue($endpointHit);

@@ -86,6 +86,7 @@ class GeminiService
                     'error' => $res->json('error.message') ?? $res->body(),
                 ]);
             }
+
             return $res->successful()
                 ? $this->decode($res->json('candidates.0.content.parts.0.text'))
                 : null;

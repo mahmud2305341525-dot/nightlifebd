@@ -2,7 +2,6 @@
 
 namespace Tests\Feature;
 
-use App\Models\AuditLog;
 use App\Models\Event;
 use App\Models\EventBooking;
 use App\Models\EventTicketTier;

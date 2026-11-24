@@ -9,10 +9,13 @@ use App\Models\Report;
 use App\Models\User;
 use App\Models\Venue;
 use App\Models\VenueScore;
+use Illuminate\Console\Command;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Schema;
 use Tests\TestCase;
 
 class Stage2HardeningAndReliabilityTest extends TestCase
@@ -789,10 +792,10 @@ class Stage2HardeningAndReliabilityTest extends TestCase
 
     public function test_database_stage2_indexes_exist_and_are_active(): void
     {
-        $venueIndexes = array_column(\Illuminate\Support\Facades\Schema::getIndexes('venues'), 'name');
+        $venueIndexes = array_column(Schema::getIndexes('venues'), 'name');
         $this->assertContains('venues_geo_idx', $venueIndexes, 'venues table must have venues_geo_idx on (lat, lng).');
 
-        $notifIndexes = array_column(\Illuminate\Support\Facades\Schema::getIndexes('event_notifications'), 'name');
+        $notifIndexes = array_column(Schema::getIndexes('event_notifications'), 'name');
         $this->assertContains(
             'event_notifications_event_id_user_id_unique',
             $notifIndexes,
@@ -802,7 +805,7 @@ class Stage2HardeningAndReliabilityTest extends TestCase
 
     public function test_notification_command_logs_safely_when_concurrent_duplicates_occur(): void
     {
-        \Illuminate\Support\Facades\Log::spy();
+        Log::spy();
 
         $organizer = User::create([
             'name' => 'Host Observability',
@@ -836,12 +839,12 @@ class Stage2HardeningAndReliabilityTest extends TestCase
         Artisan::call('events:notify-upcoming');
 
         // Verify that Log calls, if any, do NOT expose user email or password
-        \Illuminate\Support\Facades\Log::shouldNotHaveReceived('error');
+        Log::shouldNotHaveReceived('error');
     }
 
     public function test_notification_command_returns_failure_status_when_database_exception_occurs(): void
     {
-        \Illuminate\Support\Facades\Log::spy();
+        Log::spy();
 
         $organizer = User::create([
             'name' => 'Host Error Test',
@@ -875,13 +878,13 @@ class Stage2HardeningAndReliabilityTest extends TestCase
             $exitCode = Artisan::call('events:notify-upcoming');
 
             // Must return Command::FAILURE (code 1)
-            $this->assertSame(\Illuminate\Console\Command::FAILURE, $exitCode, 'Command must exit with FAILURE status when DB errors occur.');
+            $this->assertSame(Command::FAILURE, $exitCode, 'Command must exit with FAILURE status when DB errors occur.');
 
             // Successful notification count must remain 0 (not falsely incremented)
             $this->assertSame(0, EventNotification::count());
 
             // Error must be logged with structured context
-            \Illuminate\Support\Facades\Log::shouldHaveReceived('error')->once();
+            Log::shouldHaveReceived('error')->once();
         } finally {
             DB::statement('DROP TRIGGER IF EXISTS fail_notif_insert;');
         }

@@ -7,6 +7,8 @@ use App\Http\Middleware\SetLocale;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
+use Illuminate\Session\TokenMismatchException;
+use Illuminate\Support\Facades\Log;
 use Spatie\Permission\Middleware\PermissionMiddleware;
 use Spatie\Permission\Middleware\RoleMiddleware;
 use Spatie\Permission\Middleware\RoleOrPermissionMiddleware;
@@ -33,8 +35,8 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->append(RequestId::class);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
-        $exceptions->report(function (\Illuminate\Session\TokenMismatchException $e) {
-            \Illuminate\Support\Facades\Log::warning('Security: CSRF token mismatch detected', [
+        $exceptions->report(function (TokenMismatchException $e) {
+            Log::warning('Security: CSRF token mismatch detected', [
                 'ip' => request()->ip(),
                 'url' => request()->fullUrl(),
             ]);
