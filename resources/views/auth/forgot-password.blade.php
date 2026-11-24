@@ -6,16 +6,6 @@
     <!-- Session Status -->
     <x-auth-session-status class="mb-4" :status="session('status')" />
 
-    @if (session('demo_reset_link'))
-        <div class="mb-4 p-4 bg-indigo-50 dark:bg-indigo-950/60 border border-indigo-200 dark:border-indigo-800 rounded-xl text-xs space-y-2">
-            <span class="font-bold text-indigo-900 dark:text-indigo-200 block">💡 {{ __('Direct Reset Link (Local Demo Mode)') }}:</span>
-            <a href="{{ session('demo_reset_link') }}" class="inline-flex items-center gap-1.5 px-3.5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg font-bold text-xs shadow-sm transition">
-                <span>🔑</span>
-                <span>{{ __('Reset Password Now') }}</span> →
-            </a>
-        </div>
-    @endif
-
     <form method="POST" action="{{ route('password.email') }}">
         @csrf
 

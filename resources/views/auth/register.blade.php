@@ -39,6 +39,12 @@
             <x-input-error :messages="$errors->get('password_confirmation')" class="mt-2" />
         </div>
 
+        @if (config('services.turnstile.site_key'))
+            @push('head')<script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>@endpush
+            <div class="mt-4 cf-turnstile" data-sitekey="{{ config('services.turnstile.site_key') }}"></div>
+            <x-input-error :messages="$errors->get('captcha')" class="mt-2" />
+        @endif
+
         <div class="flex items-center justify-end mt-4">
             <a class="underline text-sm text-gray-600 hover:text-gray-900 rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500" href="{{ route('login') }}">
                 {{ __('Already registered?') }}

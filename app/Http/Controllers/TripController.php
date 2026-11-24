@@ -26,6 +26,8 @@ class TripController extends Controller
             'duration' => ['required', 'integer', 'between:15,180'],
             'destination' => ['nullable', 'string', 'max:120'],
             'vehicle_plate' => ['nullable', 'string', 'max:30'],
+            'share_pin' => ['nullable', 'regex:/^\d{4,8}$/'],
+            'max_views' => ['nullable', 'integer', 'between:1,100'],
         ]);
 
         $maxActive = (int) config('nightlife.max_active_trips', 1);
@@ -49,6 +51,8 @@ class TripController extends Controller
                 'destination' => $d['destination'] ?? null,
                 'vehicle_plate' => isset($d['vehicle_plate']) ? strtoupper($d['vehicle_plate']) : null,
                 'expires_at' => now()->addMinutes((int) $d['duration']),
+                'share_pin' => $d['share_pin'] ?? null,
+                'max_views' => $d['max_views'] ?? null,
             ]);
 
             $link = route('track.show', $trip->token);
@@ -93,22 +97,44 @@ class TripController extends Controller
 
     // ---- public tracking page (anyone with the secret 40-character link) ----
 
-    public function track(Trip $trip)
+    public function track(Request $request, Trip $trip)
     {
         if (! $trip->isActive()) {
             return response()->view('trips.expired', [], 410);
         }
+        if ($trip->share_pin && ! hash_equals((string) $trip->share_pin, (string) $request->session()->get('trip_pin_'.$trip->id))) {
+            return response()->view('trips.pin', ['trip' => $trip], 200);
+        }
+        if ($trip->max_views && $trip->view_count >= $trip->max_views) {
+            return response()->view('trips.expired', [], 410);
+        }
+        $trip->increment('view_count');
 
         return view('trips.track', ['trip' => $trip->load('user:id,name')]);
     }
 
-    public function trackData(Trip $trip)
+    public function verifyPin(Request $request, Trip $trip)
+    {
+        $data = $request->validate(['pin' => ['required', 'string', 'max:8']]);
+        if (! $trip->share_pin || hash_equals((string) $trip->share_pin, (string) $data['pin'])) {
+            $request->session()->put('trip_pin_'.$trip->id, (string) $data['pin']);
+
+            return redirect()->route('track.show', $trip->token);
+        }
+
+        return back()->withErrors(['pin' => __('Incorrect tracking PIN.')]);
+    }
+
+    public function trackData(Request $request, Trip $trip)
     {
         if (! $trip->isActive()) {
             return response()->json([
                 'active' => false,
                 'message' => __('This trip has ended or the sharing link has expired.'),
             ], 410);
+        }
+        if ($trip->share_pin && ! hash_equals((string) $trip->share_pin, (string) $request->session()->get('trip_pin_'.$trip->id))) {
+            return response()->json(['active' => false, 'message' => __('PIN required.')], 403);
         }
 
         $secondsSincePing = $trip->last_ping_at ? (int) abs(now()->diffInSeconds($trip->last_ping_at)) : null;

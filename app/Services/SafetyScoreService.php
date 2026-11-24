@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\Report;
+use App\Models\User;
 use App\Models\Venue;
 use App\Models\VenueScore;
 use App\Support\Geo;
@@ -98,6 +99,8 @@ class SafetyScoreService
     /** @return array{score:int,badge:string,explanation:string,count:int,risk:float,confidence:array{level:string,score:int,evidence_count:int,independent_reporters:int,explanation:string}} */
     public function compute(Venue $v, Collection $reports, string $bucket): array
     {
+        $trustScores = User::whereIn('id', $reports->pluck('user_id')->filter()->unique())
+            ->pluck('trust_score', 'id');
         $risk = 0.0;
         $cats = [];
         $positives = 0;
@@ -114,7 +117,9 @@ class SafetyScoreService
             $ageDays = max(0, now()->diffInDays($r->incident_time, false) * -1);
             $decay = exp(-$ageDays / 30);
             $w = $r->bucket() === $bucket ? 1.0 : 0.3;
-            $trust = (float) ($r->user->trust_score ?? 0.5);
+            $trust = $r->relationLoaded('user') && $r->user
+                ? (float) $r->user->trust_score
+                : (float) ($trustScores->get($r->user_id) ?? 0.5);
 
             if ($r->category === 'positive') {
                 $risk -= 0.5 * $trust * $decay * $w;
@@ -143,7 +148,10 @@ class SafetyScoreService
             $risk = 11.0; // max ~55 point drop without independent community corroboration
         }
 
-        $base = 40 + ($v->has_cctv ? 20 : 0) + ($v->has_guard ? 20 : 0) + $v->lighting * 4;
+        $base = 40
+            + ($v->has_cctv === true ? 20 : 0)
+            + ($v->has_guard === true ? 20 : 0)
+            + ($v->lighting !== null ? (int) $v->lighting * 4 : 0);
         $score = (int) round(max(0, min(100, $base + self::BUCKET_ADJUST[$bucket] - $risk * 5)));
         $badge = $score >= 70 ? 'safe' : ($score >= 45 ? 'moderate' : 'caution');
 

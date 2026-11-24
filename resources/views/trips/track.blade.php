@@ -2,13 +2,13 @@
 <html lang="en">
 <head>
     <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>{{ $trip->user->name }} - NightLifeBD live trip</title>
+    <title>NightLifeBD live trip</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
     <style>body{margin:0;font-family:system-ui,"Nirmala UI",sans-serif}#bar{padding:10px 14px;background:#0f172a;color:#fff;font-size:14px}#map{height:calc(100vh - 78px)}</style>
 </head>
 <body>
     <div id="bar">
-        <b>🌙 {{ $trip->user->name }}</b> {{ $trip->kind === 'ride' ? '(ride)' : '(trip)' }}
+        <b>🌙 {{ __('Traveler') }}</b> {{ $trip->kind === 'ride' ? '(ride)' : '(trip)' }}
         @if ($trip->destination) → {{ $trip->destination }} @endif
         @if ($trip->vehicle_plate) · {{ $trip->vehicle_plate }} @endif
         <div id="s" style="font-size:12px;color:#94a3b8">Waiting for location... · link expires {{ $trip->expires_at->format('h:i A') }}</div>

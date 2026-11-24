@@ -28,6 +28,8 @@ class IncidentPhotoService
         'image/webp' => 'webp',
     ];
 
+    public function __construct(private GeminiService $gemini) {}
+
     /**
      * Validate the uploaded file strictly by inspecting actual binary content,
      * dimensions, and magic bytes. Do NOT rely on client headers alone.
@@ -104,6 +106,31 @@ class IncidentPhotoService
         ];
     }
 
+    public function advisoryCheck(UploadedFile $file): array
+    {
+        if (! $this->gemini->enabled()) {
+            return ['relevance' => 'unknown', 'faces_blur_suggested' => false, 'explicit_flagged' => false, 'advice' => 'AI photo check unavailable; manual moderation required.'];
+        }
+
+        $meta = $this->validateFile($file);
+        $mime = $meta['mime'];
+        $base64 = base64_encode(file_get_contents($file->getRealPath()));
+        $prompt = 'ROLE: incident photo moderator assistant. TASK: assess only whether the image appears relevant to a nighttime safety incident. CONSTRAINTS: never identify people or claim facts not visible. Return ONLY JSON: {"relevance":"relevant|irrelevant|uncertain","faces_blur_suggested":true|false,"explicit_flagged":true|false,"advice":"one moderator sentence"}';
+
+        $result = $this->gemini->visionJson($prompt, $base64, $mime);
+
+        if (! is_array($result)) {
+            return ['relevance' => 'unknown', 'faces_blur_suggested' => false, 'explicit_flagged' => false, 'advice' => 'AI photo check failed; manual moderation required.'];
+        }
+
+        return [
+            'relevance' => in_array($result['relevance'] ?? null, ['relevant', 'irrelevant', 'uncertain'], true) ? $result['relevance'] : 'unknown',
+            'faces_blur_suggested' => (bool) ($result['faces_blur_suggested'] ?? false),
+            'explicit_flagged' => (bool) ($result['explicit_flagged'] ?? false),
+            'advice' => mb_substr((string) ($result['advice'] ?? 'Manual moderation required.'), 0, 500),
+        ];
+    }
+
     /**
      * Process, strip EXIF metadata, generate a genuine thumbnail, and store
      * securely on the private filesystem disk using opaque file identifiers.
@@ -113,6 +140,7 @@ class IncidentPhotoService
     public function processAndStore(UploadedFile $file, Report $report): array
     {
         $meta = $this->validateFile($file);
+        $advice = $this->advisoryCheck($file);
         $realPath = $file->getRealPath();
         $ext = $meta['extension'];
 
@@ -151,6 +179,10 @@ class IncidentPhotoService
                         'path' => $fullPath,
                         'thumbnail' => $thumbPath,
                         'size_bytes' => strlen($fullBytes),
+                        'ai_relevance' => $advice['relevance'],
+                        'ai_faces_blur_suggested' => $advice['faces_blur_suggested'],
+                        'ai_explicit_flagged' => $advice['explicit_flagged'],
+                        'ai_advice' => $advice['advice'],
                     ];
                 } catch (\Throwable $e) {
                     if (is_resource($src) || (is_object($src) && $src instanceof \GdImage)) {
@@ -170,6 +202,10 @@ class IncidentPhotoService
             'path' => $fullPath,
             'thumbnail' => $thumbPath,
             'size_bytes' => strlen($cleanBytes),
+            'ai_relevance' => $advice['relevance'],
+            'ai_faces_blur_suggested' => $advice['faces_blur_suggested'],
+            'ai_explicit_flagged' => $advice['explicit_flagged'],
+            'ai_advice' => $advice['advice'],
         ];
     }
 

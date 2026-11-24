@@ -29,6 +29,8 @@ class Report extends Model
             'spam_probability' => 'float',
             'embedding' => 'array',
             'rating' => 'integer',
+            'pii_scrubbed' => 'boolean',
+            'defamation_flagged' => 'boolean',
         ];
     }
 

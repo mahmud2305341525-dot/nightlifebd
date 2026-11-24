@@ -9,3 +9,12 @@
 /.github export-ignore
 CHANGELOG.md export-ignore
 .styleci.yml export-ignore
+/.env export-ignore
+/.env.* export-ignore
+/.git export-ignore
+/.gitignore export-ignore
+/.phpunit.result.cache export-ignore
+/node_modules export-ignore
+/vendor export-ignore
+/storage/framework/views export-ignore
+/public/build export-ignore

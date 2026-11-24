@@ -519,7 +519,12 @@ class RouteService
             }
         }
 
-        // 2. Fallback to public OSRM server
+        // 2. Demo-only fallback to public OSRM; production must be explicitly configured.
+        $allowDemoOsrm = app()->environment(['testing', 'local']) || config('nightlife.demo_enabled');
+        if (! $allowDemoOsrm) {
+            throw new \RuntimeException(__('Routing unavailable. Configure a production routing provider before requesting routes.'));
+        }
+
         try {
             $osrmProfile = $isWalking ? 'foot' : 'driving';
             $url = sprintf('https://router.project-osrm.org/route/v1/%s/%F,%F;%F,%F', $osrmProfile, $fLng, $fLat, $tLng, $tLat);
@@ -529,19 +534,6 @@ class RouteService
                 'geometries' => 'geojson',
                 'steps' => 'false',
             ]);
-
-            // If walking is requested but public OSRM rejected foot (e.g. 400 or NoRoute on demo server),
-            // gracefully fallback to driving geometry and convert duration to walking speed (~4.8 km/h or 1.33 m/s)
-            // without fabricating routes or breaking.
-            if (! $res->successful() && $isWalking) {
-                $drivingUrl = sprintf('https://router.project-osrm.org/route/v1/driving/%F,%F;%F,%F', $fLng, $fLat, $tLng, $tLat);
-                $res = Http::timeout(15)->get($drivingUrl, [
-                    'alternatives' => 'true',
-                    'overview' => 'full',
-                    'geometries' => 'geojson',
-                    'steps' => 'false',
-                ]);
-            }
 
             if ($res->successful()) {
                 $json = $res->json();

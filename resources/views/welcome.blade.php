@@ -128,7 +128,12 @@
     <section class="max-w-6xl mx-auto px-4 pb-10">
         <div class="rounded-xl bg-amber-50 border border-amber-200 px-5 py-4 text-sm text-amber-900 flex gap-3 items-start">
             <span class="text-lg shrink-0">⚠️</span>
-            <p>{{ __('Safety information is community-sourced and AI-assisted. It is advisory only and never replaces calling') }} <strong>999</strong>. {{ __('All demo venues, reports and users are fictional.') }}
+            <p>{{ __('Safety information is community-sourced and AI-assisted. It is advisory only and never replaces calling') }} <strong>999</strong>.
+                @if (config('nightlife.demo_enabled'))
+                    {{ __('Demo mode is enabled: venues, reports and users may be fictional.') }}
+                @else
+                    {{ __('Real-mode data may come from OpenStreetMap, community reports and approved venue owners.') }}
+                @endif
                 <a href="{{ route('how-it-works') }}" class="underline font-semibold ml-2">📊 {{ __('How our algorithms work →') }}</a>
             </p>
         </div>

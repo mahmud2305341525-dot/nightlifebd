@@ -93,7 +93,7 @@ P);
         return array_slice($tips, 0, 3);
     }
 
-    private function yn(bool $b): string
+    private function yn(?bool $b): string
     {
         return $b ? 'yes' : 'no';
     }

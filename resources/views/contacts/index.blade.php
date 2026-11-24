@@ -1,6 +1,11 @@
 <x-app-layout>
     <div class="max-w-xl mx-auto p-4 space-y-5">
         <h1 class="text-xl font-bold text-slate-800 dark:text-slate-100">{{ __('Emergency contacts') }} ({{ $contacts->count() }}/5)</h1>
+        @if (session('telegram_link'))
+            <div class="rounded-lg border border-indigo-200 bg-indigo-50 p-3 text-sm">
+                <a href="{{ session('telegram_link') }}" target="_blank" rel="noopener" class="font-semibold text-indigo-700 underline">{{ __('Open Telegram verification link') }}</a>
+            </div>
+        @endif
         @if ($contacts->isEmpty())
             <div class="bg-white dark:bg-slate-900 rounded-xl shadow-sm p-6 text-center border border-slate-200 dark:border-slate-800 space-y-2">
                 <div class="text-3xl">👥</div>
@@ -17,11 +22,20 @@
                             <b class="text-slate-900 dark:text-slate-100">{{ $c->name }}</b> <span class="text-slate-600 dark:text-slate-400">- {{ $c->phone }} {{ $c->relation ? '('.$c->relation.')' : '' }}</span>
                             <span class="block text-xs text-slate-500 dark:text-slate-400">
                                 {{ $c->email ? '✉ '.$c->email : '' }} {{ $c->telegram_chat_id ? '· Telegram '.$c->telegram_chat_id : '' }}
+                                · {{ __(ucfirst($c->verification_status ?? 'unverified')) }}
                             </span>
                         </span>
-                        <form method="POST" action="{{ route('contacts.destroy', $c) }}">@csrf @method('DELETE')
-                            <button class="text-red-600 hover:text-red-700 text-sm font-medium">{{ __('Remove') }}</button>
-                        </form>
+                        <div class="flex items-center gap-2">
+                            @if ($c->telegram_chat_id)
+                                <form method="POST" action="{{ route('contacts.telegram-link', $c) }}">
+                                    @csrf
+                                    <button class="text-indigo-600 text-sm font-medium">{{ __('Verify Telegram') }}</button>
+                                </form>
+                            @endif
+                            <form method="POST" action="{{ route('contacts.destroy', $c) }}">@csrf @method('DELETE')
+                                <button class="text-red-600 hover:text-red-700 text-sm font-medium">{{ __('Remove') }}</button>
+                            </form>
+                        </div>
                     </li>
                 @endforeach
             </ul>

@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Event;
 use App\Models\Venue;
+use App\Services\GeocodingService;
 use App\Services\RouteService;
 use App\Support\TimeBucket;
 use Illuminate\Http\Request;
@@ -48,6 +49,18 @@ class RouteController extends Controller
             'buckets' => TimeBucket::labels(),
             'bucket' => TimeBucket::current(),
             'event' => $event,
+        ]);
+    }
+
+    public function geocodeAssist(Request $request, GeocodingService $geocoder)
+    {
+        $data = $request->validate([
+            'q' => ['required', 'string', 'min:2', 'max:200'],
+        ]);
+
+        return response()->json([
+            'results' => $geocoder->search($data['q']),
+            'attribution' => '© OpenStreetMap contributors',
         ]);
     }
 

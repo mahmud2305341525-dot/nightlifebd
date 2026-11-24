@@ -131,7 +131,7 @@ Badges:
                     ['Cold-start problem','New areas with few reporters show Unrated even if genuinely unsafe. Trust scores need time to calibrate.'],
                     ['GPS accuracy in dense Dhaka','In high-rise areas GPS can be offset 30–50m, attributing incidents to the wrong venue.'],
                     ['Routing API dependency','Safe route needs connectivity to OpenRouteService. Offline fallback uses straight-line heuristic.'],
-                    ['Fictional demo data','All venues, reports and users in the current deployment are fictional, seeded for demonstration.'],
+                    [config('nightlife.demo_enabled') ? 'Demo data enabled' : 'Production data only', config('nightlife.demo_enabled') ? 'Fictional venues, reports and users are visible because demo mode is explicitly enabled.' : 'No fictional records are seeded by default. OSM records are unverified until independently confirmed.'],
                 ] as [$title, $desc])
                 <div class="px-5 py-4">
                     <div class="font-semibold text-slate-700 mb-0.5">⚠️ {{ $title }}</div>

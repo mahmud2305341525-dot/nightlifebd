@@ -11,8 +11,10 @@ use App\Models\Venue;
 use App\Services\GeminiService;
 use App\Services\LocalAnalyzer;
 use Illuminate\Console\Command;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Http;
 
 class HealthCheck extends Command
 {
@@ -69,7 +71,7 @@ class HealthCheck extends Command
         }
 
         // Test Local Analyzer
-        $testResult = $analyzer->classify('রাত ১২টায় ছিনতাইকারীর কবলে পড়েছিলাম');
+        $testResult = $analyzer->analyze('রাত ১২টায় ছিনতাইকারীর কবলে পড়েছিলাম');
         $localOk = ($testResult['category'] ?? null) === 'theft';
         $rows[] = ['Bangla NLP Lexicon', $localOk ? '✅ Active (Recognized ছিনতাই -> theft)' : '⚠️ Check LocalAnalyzer', $localOk ? 'OK' : 'WARN'];
 
@@ -83,9 +85,52 @@ class HealthCheck extends Command
             // DB might be down
         }
 
+        $heartbeat = Cache::get('nightlife:scheduler-heartbeat');
+        $rows[] = ['Scheduler Heartbeat', $heartbeat ? '✅ Heartbeat recorded: '.$heartbeat : '❌ Not reported', $heartbeat ? 'OK' : 'FAIL'];
+        $queueConnection = config('queue.default');
+        $queueOk = $queueConnection !== 'sync';
+        $rows[] = ['Queue Worker', $queueOk ? "✅ Queue configured: {$queueConnection}" : '❌ Sync queue is not a worker', $queueOk ? 'OK' : 'FAIL'];
+
+        if (! config('nightlife.ai_enabled')) {
+            $geminiStatus = '⚡ Disabled by kill switch';
+            $geminiResult = 'INFO';
+        } elseif (! $gemini->enabled()) {
+            $geminiStatus = '⚡ API key not configured';
+            $geminiResult = 'WARN';
+        } else {
+            try {
+                $response = Http::timeout(10)
+                    ->withHeaders(['x-goog-api-key' => config('services.gemini.key')])
+                    ->post('https://generativelanguage.googleapis.com/v1beta/models/'.config('services.gemini.model').':generateContent', [
+                        'contents' => [['parts' => [['text' => 'Reply OK']]]],
+                        'generationConfig' => ['maxOutputTokens' => 4, 'temperature' => 0],
+                    ]);
+                $geminiStatus = $response->successful() ? '✅ Live Gemini test passed' : '❌ Live Gemini test HTTP '.$response->status();
+                $geminiResult = $response->successful() ? 'OK' : 'FAIL';
+            } catch (\Throwable $e) {
+                $geminiStatus = '❌ Gemini timeout or connection failure';
+                $geminiResult = 'FAIL';
+            }
+        }
+        $rows[] = ['Gemini Live Provider', $geminiStatus, $geminiResult];
+
+        $routingStatus = config('nightlife.routing_driver');
+        if ($routingStatus === 'ors' && filled(config('services.ors.key'))) {
+            $rows[] = ['Routing Provider', '✅ ORS key configured', 'OK'];
+        } elseif ($routingStatus === 'osrm') {
+            $rows[] = ['Routing Provider', '❌ Public OSRM is not production-ready', 'FAIL'];
+        } else {
+            $rows[] = ['Routing Provider', '❌ Routing provider not configured', 'FAIL'];
+        }
+
+        $mailDriver = config('mail.default');
+        $rows[] = ['Mail Provider', in_array($mailDriver, ['log', 'array'], true) ? '❌ Local-only mail driver: '.$mailDriver : '✅ Mail configured: '.$mailDriver, in_array($mailDriver, ['log', 'array'], true) ? 'FAIL' : 'OK'];
+        $rows[] = ['Telegram Provider', filled(config('services.telegram.token')) ? '✅ Bot token configured' : '⚠️ Not configured', filled(config('services.telegram.token')) ? 'OK' : 'WARN'];
+        $rows[] = ['SMS Provider', '⚠️ Not configured', 'WARN'];
+
         // 7. Demo Simulator Status
-        $demoRoute = (config('app.debug') || app()->isLocal());
-        $rows[] = ['Demo Simulator (/demo)', $demoRoute ? '✅ Active (/demo and navigation bar)' : '⚠️ Disabled', 'OK'];
+        $demoEnabled = config('nightlife.demo_enabled');
+        $rows[] = ['Demo Simulator (/demo)', $demoEnabled ? '⚙️ Explicit demo mode enabled' : '✅ Disabled', $demoEnabled ? 'WARN' : 'OK'];
 
         $this->table(['Check Component', 'Status & Detail', 'Result'], $rows);
         $this->newLine();

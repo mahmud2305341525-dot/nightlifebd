@@ -18,6 +18,7 @@ class Trip extends Model
             'last_ping_at' => 'datetime',
             'last_lat' => 'float',
             'last_lng' => 'float',
+            'low_confidence' => 'boolean',
         ];
     }
 

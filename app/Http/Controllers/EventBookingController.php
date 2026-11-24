@@ -2,26 +2,38 @@
 
 namespace App\Http\Controllers;
 
+use App\Contracts\PaymentGateway;
 use App\Models\Event;
 use App\Models\EventBooking;
 use App\Models\EventTicketTier;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 
 class EventBookingController extends Controller
 {
-    public function store(Request $request, Event $event): RedirectResponse
+    public function store(Request $request, Event $event, PaymentGateway $gateway): RedirectResponse
     {
         $validated = $request->validate([
             'ticket_tier_id' => ['required', 'integer'],
             'quantity' => ['required', 'integer', 'min:1', 'max:5'],
             'payment_method' => ['required', 'string', 'in:free,mock_bkash,mock_nagad,mock_card'],
+            'idempotency_key' => ['nullable', 'string', 'max:80'],
         ]);
 
-        $booking = DB::transaction(function () use ($validated, $event) {
+        $idempotencyKey = $validated['idempotency_key'] ?? Str::uuid()->toString();
+        $existing = EventBooking::where('idempotency_key', $idempotencyKey)
+            ->where('user_id', auth()->id())
+            ->first();
+        if ($existing) {
+            return redirect()->route('events.bookings.show', $existing->booking_reference)
+                ->with('status', __('Existing booking returned.'));
+        }
+
+        $booking = DB::transaction(function () use ($validated, $event, $idempotencyKey) {
             /** @var EventTicketTier|null $tier */
             $tier = EventTicketTier::where('id', $validated['ticket_tier_id'])
                 ->where('event_id', $event->id)
@@ -51,7 +63,18 @@ class EventBookingController extends Controller
 
             $unitPrice = (float) $tier->price;
             $totalPrice = $unitPrice * $requestedQty;
-            $paymentStatus = $totalPrice <= 0 ? 'free' : 'paid';
+            if ($totalPrice > 0 && $validated['payment_method'] === 'free') {
+                throw ValidationException::withMessages([
+                    'payment_method' => __('Paid ticket tiers require a configured payment method.'),
+                ]);
+            }
+            if ($totalPrice > 0 && config('nightlife.payments_driver') === 'none') {
+                throw ValidationException::withMessages([
+                    'payment_method' => __('Paid ticketing is not enabled. This event cannot be booked until a verified payment provider is configured.'),
+                ]);
+            }
+            $paymentStatus = $totalPrice <= 0 ? 'free' : 'pending';
+            $status = $totalPrice <= 0 ? 'confirmed' : 'pending_payment';
 
             $tier->increment('booked_count', $requestedQty);
 
@@ -64,9 +87,26 @@ class EventBookingController extends Controller
                 'total_price' => $totalPrice,
                 'payment_method' => $validated['payment_method'],
                 'payment_status' => $paymentStatus,
-                'status' => 'confirmed',
+                'status' => $status,
+                'currency' => 'BDT',
+                'idempotency_key' => $idempotencyKey,
+                'payment_expires_at' => $totalPrice > 0 ? now()->addMinutes(10) : null,
             ]);
         });
+
+        if ($booking->total_price > 0) {
+            $gatewayResult = $gateway->createPending($booking);
+            if (($gatewayResult['status'] ?? null) === 'ticketing_not_enabled') {
+                DB::transaction(function () use ($booking) {
+                    $booking->update(['status' => 'cancelled', 'payment_status' => 'cancelled']);
+                    $booking->ticketTier()->decrement('booked_count', $booking->quantity);
+                });
+
+                return redirect()->back()->withErrors([
+                    'payment_method' => __('Paid ticketing is not enabled. This event cannot be booked until a verified payment provider is configured.'),
+                ]);
+            }
+        }
 
         return redirect()
             ->route('events.bookings.show', $booking->booking_reference)
@@ -91,6 +131,17 @@ class EventBookingController extends Controller
             'event' => $booking->event,
             'tier' => $booking->ticketTier,
         ]);
+    }
+
+    public function mockWebhook(Request $request, PaymentGateway $gateway)
+    {
+        if (! config('nightlife.demo_enabled') || config('nightlife.payments_driver') !== 'mock') {
+            return response()->json(['status' => 'rejected', 'message' => 'Mock payments unavailable'], 404);
+        }
+
+        $result = $gateway->handleWebhook($request);
+
+        return response()->json($result, ($result['status'] ?? null) === 'rejected' ? 422 : 200);
     }
 
     public function mine(): View

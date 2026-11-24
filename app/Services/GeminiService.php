@@ -15,7 +15,7 @@ class GeminiService
 
     public function enabled(): bool
     {
-        return filled(config('services.gemini.key'));
+        return (bool) config('nightlife.ai_enabled', true) && filled(config('services.gemini.key'));
     }
 
     /** Ask the model for a JSON answer and decode it. */
@@ -25,21 +25,64 @@ class GeminiService
             return null;
         }
         try {
+            $models = array_values(array_unique([
+                (string) config('services.gemini.model'),
+                (string) config('services.gemini.fallback_model'),
+            ]));
+            foreach ($models as $model) {
+                if (! filled($model)) {
+                    continue;
+                }
+                $res = Http::timeout(30)
+                    ->withHeaders(['x-goog-api-key' => config('services.gemini.key')])
+                    ->post(self::BASE.$model.':generateContent', [
+                        'contents' => [['parts' => [['text' => $prompt]]]],
+                        'generationConfig' => ['responseMimeType' => 'application/json', 'temperature' => 0.2],
+                    ]);
+                if ($res->successful()) {
+                    $decoded = $this->decode($res->json('candidates.0.content.parts.0.text'));
+                    if ($decoded !== null) {
+                        return $decoded;
+                    }
+                } else {
+                    Log::warning('Gemini generateContent failed', [
+                        'model' => $model,
+                        'status' => $res->status(),
+                    ]);
+                }
+            }
+
+            return null;
+        } catch (\Throwable $e) {
+            Log::warning('Gemini error: '.$e->getMessage());
+
+            return null;
+        }
+    }
+
+    public function visionJson(string $prompt, string $base64, string $mimeType): ?array
+    {
+        if (! $this->enabled()) {
+            return null;
+        }
+        try {
             $res = Http::timeout(30)
                 ->withHeaders(['x-goog-api-key' => config('services.gemini.key')])
                 ->post(self::BASE.config('services.gemini.model').':generateContent', [
-                    'contents' => [['parts' => [['text' => $prompt]]]],
-                    'generationConfig' => ['responseMimeType' => 'application/json', 'temperature' => 0.2],
+                    'contents' => [[
+                        'parts' => [
+                            ['text' => $prompt],
+                            ['inlineData' => ['mimeType' => $mimeType, 'data' => $base64]],
+                        ],
+                    ]],
+                    'generationConfig' => ['responseMimeType' => 'application/json', 'temperature' => 0.1],
                 ]);
-            if (! $res->successful()) {
-                Log::warning('Gemini generateContent failed', ['status' => $res->status()]);
 
-                return null;
-            }
-
-            return $this->decode($res->json('candidates.0.content.parts.0.text'));
+            return $res->successful()
+                ? $this->decode($res->json('candidates.0.content.parts.0.text'))
+                : null;
         } catch (\Throwable $e) {
-            Log::warning('Gemini error: '.$e->getMessage());
+            Log::warning('Gemini vision error: '.$e->getMessage());
 
             return null;
         }

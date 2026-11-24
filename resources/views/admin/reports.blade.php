@@ -35,6 +35,16 @@
                 </div>
                 <p class="text-slate-800 dark:text-slate-200">{{ $r->body }}</p>
                 @if ($r->summary_en)<p class="text-xs text-slate-500 dark:text-slate-400">AI summary: {{ $r->summary_en }}</p>@endif
+                @if ($r->ai_suggested_category)
+                    <div class="text-xs rounded-lg border border-indigo-200 bg-indigo-50 dark:bg-indigo-950/40 p-2">
+                        <strong>{{ __('Moderator copilot') }}:</strong>
+                        {{ \App\Models\Report::categoryLabel($r->ai_suggested_category) }},
+                        {{ __('severity') }} {{ $r->ai_suggested_severity }}/5.
+                        {{ $r->ai_suggested_rationale }}
+                        @if ($r->defamation_flagged)<span class="text-red-700 font-semibold">{{ __('Defamation/name-risk flag') }}</span>@endif
+                        @if ($r->pii_scrubbed)<span class="text-amber-700 font-semibold">{{ __('PII scrubbed from summary') }}</span>@endif
+                    </div>
+                @endif
 
                 {{-- Photo evidence thumbnails --}}
                 @if ($r->photos && $r->photos->isNotEmpty())
@@ -43,6 +53,13 @@
                             <a href="{{ $photo->url() }}" target="_blank" class="block" title="{{ __('View full photo') }}">
                                 <img src="{{ $photo->thumbUrl() }}" alt="{{ __('Evidence photo') }}" class="w-20 h-20 object-cover rounded-lg border-2 border-slate-200 dark:border-slate-700 hover:border-indigo-400 transition shadow-sm">
                             </a>
+                            @if ($photo->ai_advice)
+                                <span class="text-[10px] text-slate-500 self-end max-w-44">
+                                    {{ ucfirst($photo->ai_relevance ?? 'unknown') }} · {{ $photo->ai_advice }}
+                                    @if ($photo->ai_faces_blur_suggested) · {{ __('Blur faces/plates suggested') }}@endif
+                                    @if ($photo->ai_explicit_flagged) · {{ __('Explicit content flag') }}@endif
+                                </span>
+                            @endif
                         @endforeach
                         <span class="text-xs text-slate-400 dark:text-slate-500 self-end">📸 {{ $r->photos->count() }} {{ __('photo(s)') }}</span>
                     </div>

@@ -7,13 +7,14 @@ use App\Models\AuditLog;
 use App\Models\Report;
 use App\Models\User;
 use App\Models\Venue;
+use App\Services\AiTaskService;
 use App\Services\IncidentEvaluationService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
 class DashboardController extends Controller
 {
-    public function __invoke(Request $request, IncidentEvaluationService $evaluator)
+    public function __invoke(Request $request, IncidentEvaluationService $evaluator, AiTaskService $aiTasks)
     {
         $now = now();
         $thirtyDaysAgo = $now->copy()->subDays(30);
@@ -122,13 +123,14 @@ class DashboardController extends Controller
             ->latest()
             ->limit(8)
             ->get();
+        $aiUsage = $aiTasks->usageSummary();
 
         return view('admin.dashboard', compact(
             'reportCounts', 'totalReports', 'reportsByCategory', 'trendFilled',
             'venueCount', 'pendingVenues', 'scoreDistribution', 'hotspots',
             'totalUsers', 'activeUsersWeek', 'newUsersWeek', 'bannedUsers',
             'pendingReports', 'avgResolutionHours', 'recentActions',
-            'evaluation', 'evalFrom', 'evalTo', 'evalCategory', 'evalSource'
+            'evaluation', 'evalFrom', 'evalTo', 'evalCategory', 'evalSource', 'aiUsage'
         ));
     }
 }

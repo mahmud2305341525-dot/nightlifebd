@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Models\AuditLog;
 use App\Models\Event;
 use App\Models\EventBooking;
 use App\Models\Venue;
@@ -14,6 +15,22 @@ use Illuminate\View\View;
 
 class EventModerationController extends Controller
 {
+    public function approve(Request $request, Event $event): RedirectResponse
+    {
+        $event->update(['status' => 'published', 'submission_status' => 'approved']);
+        AuditLog::record($request->user()->id, 'event.approved', ['event_id' => $event->id]);
+
+        return back()->with('status', __('Event approved and published.'));
+    }
+
+    public function reject(Request $request, Event $event): RedirectResponse
+    {
+        $event->update(['status' => 'cancelled', 'submission_status' => 'rejected']);
+        AuditLog::record($request->user()->id, 'event.rejected', ['event_id' => $event->id]);
+
+        return back()->with('status', __('Event submission rejected.'));
+    }
+
     public function index(): View
     {
         $events = Event::with(['venue', 'organizer', 'ticketTiers'])
@@ -112,6 +129,12 @@ class EventModerationController extends Controller
                 'success' => false,
                 'message' => __('Invalid ticket! No booking found with this QR or code.'),
             ], 404);
+        }
+        if (in_array($booking->payment_status, ['pending', 'expired', 'refunded', 'cancelled'], true)) {
+            return response()->json([
+                'success' => false,
+                'message' => __('Payment not confirmed or ticket refunded. Entry denied.'),
+            ], 422);
         }
 
         if ($booking->isCancelled()) {

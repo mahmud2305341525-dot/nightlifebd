@@ -14,7 +14,23 @@ class DarkSpotController extends Controller
             'lng' => ['required', 'numeric', 'between:88,93'],
             'note' => ['nullable', 'string', 'max:200'],
         ]);
-        DarkSpot::create(['user_id' => $request->user()->id, 'lat' => $data['lat'], 'lng' => $data['lng'], 'note' => isset($data['note']) ? strip_tags($data['note']) : null]);
+        $spot = DarkSpot::create([
+            'user_id' => $request->user()->id,
+            'lat' => $data['lat'],
+            'lng' => $data['lng'],
+            'note' => isset($data['note']) ? strip_tags($data['note']) : null,
+            'status' => 'community',
+        ]);
+
+        $nearbyCount = DarkSpot::whereBetween('lat', [$spot->lat - 0.00045, $spot->lat + 0.00045])
+            ->whereBetween('lng', [$spot->lng - 0.00045, $spot->lng + 0.00045])
+            ->where('created_at', '>=', now()->subDays(30))
+            ->count();
+        if ($nearbyCount >= 3) {
+            DarkSpot::whereBetween('lat', [$spot->lat - 0.00045, $spot->lat + 0.00045])
+                ->whereBetween('lng', [$spot->lng - 0.00045, $spot->lng + 0.00045])
+                ->update(['status' => 'pending_moderator']);
+        }
 
         return response()->json(['ok' => true]);
     }

@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\EmergencyContact;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 
 class EmergencyContactController extends Controller
@@ -56,10 +57,55 @@ class EmergencyContactController extends Controller
                 return back()->withInput()->withErrors(['phone' => __('Maximum five emergency contacts allowed.')]);
             }
 
-            $request->user()->emergencyContacts()->create($data);
+            $request->user()->emergencyContacts()->create(array_merge($data, [
+                'verification_status' => 'unverified',
+            ]));
 
             return back()->with('status', __('Contact saved.'));
         });
+    }
+
+    public function telegramLink(Request $request, EmergencyContact $contact)
+    {
+        abort_unless($contact->user_id === $request->user()->id, 403);
+        $token = Str::random(48);
+        $contact->update([
+            'telegram_verification_token' => $token,
+            'verification_status' => 'unverified',
+        ]);
+        $username = config('services.telegram.username');
+        $link = filled($username)
+            ? 'https://t.me/'.$username.'?start='.$token
+            : null;
+
+        return back()->with([
+            'status' => $link ? __('Telegram verification link created.') : __('Telegram bot username is not configured.'),
+            'telegram_link' => $link,
+        ]);
+    }
+
+    public function telegramWebhook(Request $request)
+    {
+        $message = $request->input('message');
+        $chatId = $message['chat']['id'] ?? null;
+        $text = trim((string) ($message['text'] ?? ''));
+        if (! is_numeric($chatId) || ! str_starts_with($text, '/start ')) {
+            return response()->json(['ok' => true]);
+        }
+        $token = trim(substr($text, 7));
+        $contact = EmergencyContact::where('telegram_verification_token', $token)->first();
+        if (! $contact) {
+            return response()->json(['ok' => true]);
+        }
+        $contact->update([
+            'telegram_chat_id' => (string) $chatId,
+            'verification_status' => 'verified',
+            'verified_at' => now(),
+            'last_reachable_at' => now(),
+            'telegram_verification_token' => null,
+        ]);
+
+        return response()->json(['ok' => true]);
     }
 
     public function destroy(Request $request, EmergencyContact $contact)

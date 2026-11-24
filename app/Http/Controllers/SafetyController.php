@@ -51,11 +51,25 @@ class SafetyController extends Controller
     public function emergencyData(Request $request)
     {
         $u = $request->user();
+        $data = $request->validate([
+            'lat' => ['nullable', 'numeric', 'between:-90,90'],
+            'lng' => ['nullable', 'numeric', 'between:-180,180'],
+            'limit' => ['nullable', 'integer', 'between:1,100'],
+        ]);
+        $havens = SafeHaven::query()->get(['type', 'name', 'lat', 'lng', 'phone']);
+        if (isset($data['lat'], $data['lng'])) {
+            $havens = $havens->map(function ($h) use ($data) {
+                $h->setAttribute('_distance_m', (int) round(Geo::distance((float) $data['lat'], (float) $data['lng'], $h->lat, $h->lng)));
+
+                return $h;
+            })->sortBy('_distance_m');
+        }
+        $havens = $havens->take((int) ($data['limit'] ?? 50))->values();
 
         return response()->json([
             'user' => $u->name,
             'contacts' => $u->emergencyContacts->map->only(['name', 'phone', 'relation'])->values(),
-            'havens' => SafeHaven::limit(400)->get(['type', 'name', 'lat', 'lng', 'phone']),
+            'havens' => $havens,
         ]);
     }
 

@@ -22,6 +22,13 @@ class ReportModerationController extends Controller
             ->orderByDesc('severity')
             ->orderByDesc('created_at')
             ->paginate(15)->withQueryString();
+        Report::where('status', 'pending')
+            ->whereNull('assigned_to')
+            ->whereKey($reports->getCollection()->pluck('id'))
+            ->update([
+                'assigned_to' => $request->user()->id,
+                'moderator_due_at' => now()->addHours(24),
+            ]);
 
         return view('admin.reports', ['reports' => $reports, 'status' => $status]);
     }

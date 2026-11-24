@@ -39,6 +39,14 @@
                     </div>
                 </div>
                 <p class="mt-3 text-slate-700 dark:text-slate-300">{{ $venue->description }}</p>
+                @if ($venue->source === 'osm')
+                    <p class="mt-2 text-xs text-slate-500 dark:text-slate-400">
+                        {{ __('Source') }}: <a class="underline" href="{{ $venue->source_url }}" target="_blank" rel="noopener">OpenStreetMap</a>
+                        · © OpenStreetMap contributors · {{ __('Unverified; security features are not assumed.') }}
+                    </p>
+                @elseif ($venue->verification_level === 'owner_verified')
+                    <p class="mt-2 text-xs text-emerald-700 dark:text-emerald-300">{{ __('Verified by owner') }} · {{ __('Checklist data is provided by an approved venue owner.') }}</p>
+                @endif
                 @if ($venue->tagList())
                     <div class="mt-2 flex flex-wrap gap-1">@foreach ($venue->tagList() as $t)<span class="text-xs bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-full px-2 py-0.5">{{ $t }}</span>@endforeach</div>
                 @endif
@@ -53,9 +61,9 @@
 
                 <ul class="mt-4 grid grid-cols-2 gap-1 text-sm text-slate-700 dark:text-slate-300">
                     <li>🕐 {{ __('Hours') }}: {{ $venue->opens_at ? substr($venue->opens_at, 0, 5) : '-' }} - {{ $venue->closes_at ? substr($venue->closes_at, 0, 5) : '-' }}</li>
-                    <li>💡 {{ __('Lighting') }}: {{ $venue->lighting }}/5</li>
-                    <li>🛡️ {{ __('Security guard') }}: {{ $venue->has_guard ? __('Yes') : __('No') }}</li>
-                    <li>📹 CCTV: {{ $venue->has_cctv ? __('Yes') : __('No') }}</li>
+                    <li>💡 {{ __('Lighting') }}: {{ $venue->lighting !== null ? $venue->lighting.'/5' : __('Not yet verified') }}</li>
+                    <li>🛡️ {{ __('Security guard') }}: {{ $venue->has_guard === null ? __('Not yet verified') : ($venue->has_guard ? __('Yes') : __('No')) }}</li>
+                    <li>📹 CCTV: {{ $venue->has_cctv === null ? __('Not yet verified') : ($venue->has_cctv ? __('Yes') : __('No')) }}</li>
                 </ul>
                 <div class="mt-4 flex flex-wrap gap-2 items-center">
                     <a href="{{ route('route.index', ['to_lat' => $venue->lat, 'to_lng' => $venue->lng, 'venue_name' => $venue->name]) }}"
@@ -64,6 +72,21 @@
                     </a>
                     <a href="{{ route('reports.create', ['venue' => $venue->id]) }}" class="rounded-md border border-slate-300 dark:border-slate-700 hover:border-slate-400 dark:hover:border-slate-600 text-slate-700 dark:text-slate-200 px-4 py-2 text-sm font-semibold transition-all">{{ __('Report / review this venue') }}</a>
                 </div>
+                @auth
+                    @if ($venue->owner_id !== auth()->id())
+                        <details class="mt-3 border-t border-slate-100 dark:border-slate-800 pt-3">
+                            <summary class="cursor-pointer text-sm font-semibold text-slate-700 dark:text-slate-300">{{ __('Own this venue? Submit a claim') }}</summary>
+                            <form method="POST" action="{{ route('venues.claim', $venue) }}" enctype="multipart/form-data" class="mt-3 grid sm:grid-cols-2 gap-2 text-sm">
+                                @csrf
+                                <input type="text" name="phone" maxlength="30" placeholder="{{ __('Business phone') }}" class="rounded-md border-slate-300">
+                                <input type="email" name="email" maxlength="190" placeholder="{{ __('Business email') }}" class="rounded-md border-slate-300">
+                                <textarea name="note" maxlength="1000" rows="2" placeholder="{{ __('Claim evidence summary') }}" class="sm:col-span-2 rounded-md border-slate-300"></textarea>
+                                <input type="file" name="evidence" accept=".jpg,.jpeg,.png,.pdf" required class="sm:col-span-2 text-xs">
+                                <button type="submit" class="sm:col-span-2 rounded-md bg-slate-800 text-white px-3 py-2">{{ __('Submit venue claim') }}</button>
+                            </form>
+                        </details>
+                    @endif
+                @endauth
                 <p class="mt-1.5 text-xs text-slate-400 dark:text-slate-500">📡 {{ __('Your GPS location will be auto-detected as the starting point.') }}</p>
             </div>
 
@@ -166,12 +189,15 @@
                         <div class="space-y-3 text-xs text-slate-700 dark:text-slate-300">
                             {{-- Step 1 --}}
                             @php
-                                $baseChecklist = 40 + ($venue->has_cctv ? 20 : 0) + ($venue->has_guard ? 20 : 0) + ($venue->lighting * 4);
+                                $baseChecklist = 40
+                                    + ($venue->has_cctv === true ? 20 : 0)
+                                    + ($venue->has_guard === true ? 20 : 0)
+                                    + ($venue->lighting !== null ? $venue->lighting * 4 : 0);
                             @endphp
                             <div class="bg-slate-50 dark:bg-slate-800/70 rounded-xl p-3 border border-slate-200 dark:border-slate-700">
                                 <div class="font-bold text-slate-900 dark:text-slate-100 text-sm mb-1">1. Venue Checklist Baseline (Max 100)</div>
                                 <div class="font-mono text-[11px] bg-white dark:bg-slate-900 p-2 rounded border border-slate-200 dark:border-slate-700 text-indigo-700 dark:text-indigo-400">
-                                    Base (40) + CCTV ({{ $venue->has_cctv ? '+20' : '+0' }}) + Guard ({{ $venue->has_guard ? '+20' : '+0' }}) + Lighting ({{ $venue->lighting }} × 4 = +{{ $venue->lighting * 4 }}) = <strong>{{ $baseChecklist }} / 100</strong>
+                                    Base (40) + CCTV ({{ $venue->has_cctv === true ? '+20' : ($venue->has_cctv === null ? 'Not verified' : '+0') }}) + Guard ({{ $venue->has_guard === true ? '+20' : ($venue->has_guard === null ? 'Not verified' : '+0') }}) + Lighting ({{ $venue->lighting !== null ? $venue->lighting.' × 4 = +'.($venue->lighting * 4) : 'Not verified' }}) = <strong>{{ $baseChecklist }} / 100</strong>
                                 </div>
                             </div>
 
@@ -313,7 +339,10 @@
                         @endif
                     </div>
                 @empty
-                    <p class="text-sm text-slate-500 dark:text-slate-400">{{ __('No verified reports yet.') }}</p>
+                    <div class="rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 p-3 text-sm">
+                        <p class="font-medium text-slate-700 dark:text-slate-300">{{ __('No verified reports yet.') }}</p>
+                        <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">{{ __('This score is currently based on physical features only. Share an incident or review to improve the evidence base.') }}</p>
+                    </div>
                 @endforelse
             </div>
 
