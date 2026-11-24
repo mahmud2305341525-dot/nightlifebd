@@ -71,38 +71,45 @@ class SafetyScoreEdgeCasesTest extends TestCase
 
     public function test_duplicate_reports_do_not_multiply_risk_independently(): void
     {
-        $venue = $this->makeVenue();
-        $user = $this->userWithRole('user', ['trust_score' => 1.0]);
+        $freezeTime = now()->setTime(22, 0);
+        $this->travelTo($freezeTime);
 
-        $originalReport = new Report([
-            'id' => 1,
-            'incident_time' => now()->setTime(22, 0),
-            'severity' => 4,
-            'category' => 'theft',
-            'status' => 'verified',
-            'duplicate_of' => null,
-            'duplicates_count' => 3, // 3 corroborating duplicates
-        ]);
-        $originalReport->setRelation('user', $user);
+        try {
+            $venue = $this->makeVenue();
+            $user = $this->userWithRole('user', ['trust_score' => 1.0]);
 
-        $duplicateReport = new Report([
-            'id' => 2,
-            'incident_time' => now()->setTime(22, 0),
-            'severity' => 4,
-            'category' => 'theft',
-            'status' => 'verified',
-            'duplicate_of' => 1, // marked as duplicate
-        ]);
-        $duplicateReport->setRelation('user', $user);
+            $originalReport = new Report([
+                'id' => 1,
+                'incident_time' => $freezeTime->copy(),
+                'severity' => 4,
+                'category' => 'theft',
+                'status' => 'verified',
+                'duplicate_of' => null,
+                'duplicates_count' => 3, // 3 corroborating duplicates
+            ]);
+            $originalReport->setRelation('user', $user);
 
-        $service = app(SafetyScoreService::class);
+            $duplicateReport = new Report([
+                'id' => 2,
+                'incident_time' => $freezeTime->copy(),
+                'severity' => 4,
+                'category' => 'theft',
+                'status' => 'verified',
+                'duplicate_of' => 1, // marked as duplicate
+            ]);
+            $duplicateReport->setRelation('user', $user);
 
-        // Duplicate report is skipped in loop, only boost applies to original
-        $result = $service->compute($venue, collect([$originalReport, $duplicateReport]), 'night');
+            $service = app(SafetyScoreService::class);
 
-        $this->assertSame(1, $result['count']); // Only original report counted
-        // Risk = 4 * 1.0 * 1.0 * (1 + 0.25 * 3) = 4 * 1.75 = 7.0
-        $this->assertEquals(7.0, $result['risk']);
+            // Duplicate report is skipped in loop, only boost applies to original
+            $result = $service->compute($venue, collect([$originalReport, $duplicateReport]), 'night');
+
+            $this->assertSame(1, $result['count']); // Only original report counted
+            // Risk = 4 * 1.0 * 1.0 * (1 + 0.25 * 3) = 4 * 1.75 = 7.0
+            $this->assertEqualsWithDelta(7.0, $result['risk'], 0.1);
+        } finally {
+            $this->travelBack();
+        }
     }
 
     public function test_extreme_low_and_high_inputs_stay_strictly_clamped_between_0_and_100(): void

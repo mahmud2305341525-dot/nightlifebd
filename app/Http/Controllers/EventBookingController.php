@@ -3,9 +3,11 @@
 namespace App\Http\Controllers;
 
 use App\Contracts\PaymentGateway;
+use App\Models\AuditLog;
 use App\Models\Event;
 use App\Models\EventBooking;
 use App\Models\EventTicketTier;
+use App\Models\PaymentEvent;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -157,22 +159,76 @@ class EventBookingController extends Controller
         ]);
     }
 
-    public function cancel(EventBooking $booking): RedirectResponse
+    public function cancel(Request $request, EventBooking $booking): RedirectResponse
     {
         abort_unless(auth()->id() === $booking->user_id, 403);
 
-        if ($booking->status === 'cancelled') {
+        if ($booking->isCancelled()) {
             return back()->with('error', __('Booking is already cancelled.'));
+        }
+
+        if ($booking->isCheckedIn()) {
+            return back()->with('error', __('Cannot cancel a ticket that has already been checked in.'));
         }
 
         if ($booking->event->starts_at->isPast()) {
             return back()->with('error', __('Cannot cancel ticket for an event that has already started.'));
         }
 
-        DB::transaction(function () use ($booking) {
-            $booking->update(['status' => 'cancelled']);
-            $booking->ticketTier()->decrement('booked_count', $booking->quantity);
-        });
+        DB::transaction(function () use ($booking, $request) {
+            $lockedBooking = EventBooking::where('id', $booking->id)->lockForUpdate()->firstOrFail();
+
+            if ($lockedBooking->isCancelled() || $lockedBooking->isCheckedIn()) {
+                return;
+            }
+
+            $isPaid = ($lockedBooking->total_price > 0 && $lockedBooking->payment_status === 'paid');
+            $newPaymentStatus = $isPaid ? 'refund_pending' : 'cancelled';
+
+            $lockedBooking->update([
+                'status' => 'cancelled',
+                'payment_status' => $newPaymentStatus,
+            ]);
+
+            if ($lockedBooking->ticket_tier_id) {
+                $tier = EventTicketTier::where('id', $lockedBooking->ticket_tier_id)->lockForUpdate()->first();
+                if ($tier) {
+                    $decrementAmount = min($tier->booked_count, $lockedBooking->quantity);
+                    if ($decrementAmount > 0) {
+                        $tier->decrement('booked_count', $decrementAmount);
+                    }
+                }
+            }
+
+            PaymentEvent::create([
+                'event_booking_id' => $lockedBooking->id,
+                'provider' => $lockedBooking->payment_method ?? 'system',
+                'event_type' => $isPaid ? 'payment.refund_requested' : 'payment.cancelled',
+                'provider_reference' => $lockedBooking->provider_reference ?? $lockedBooking->booking_reference,
+                'signature_status' => 'internal',
+                'amount' => $lockedBooking->total_price,
+                'currency' => $lockedBooking->currency ?? 'BDT',
+                'payload' => [
+                    'reason' => 'user_cancelled',
+                    'cancelled_by' => $request->user()?->id ?? auth()->id(),
+                    'previous_payment_status' => $lockedBooking->getOriginal('payment_status'),
+                    'previous_booking_status' => $lockedBooking->getOriginal('status'),
+                ],
+            ]);
+
+            AuditLog::record(
+                $request->user()?->id ?? auth()->id(),
+                'booking.cancelled',
+                [
+                    'booking_id' => $lockedBooking->id,
+                    'booking_reference' => $lockedBooking->booking_reference,
+                    'refund_initiated' => $isPaid,
+                    'payment_status' => $newPaymentStatus,
+                    'total_price' => $lockedBooking->total_price,
+                    'quantity' => $lockedBooking->quantity,
+                ]
+            );
+        }, 3);
 
         return back()->with('status', __('Ticket reservation cancelled successfully.'));
     }

@@ -39,13 +39,21 @@ class HeatmapController extends Controller
         }
         if (isset($bounds['north'], $bounds['south'], $bounds['east'], $bounds['west'])) {
             $reportQuery->where(function ($query) use ($bounds) {
-                $query->whereBetween('lat', [(float) $bounds['south'], (float) $bounds['north']])
-                    ->whereBetween('lng', [(float) $bounds['west'], (float) $bounds['east']])
-                    ->orWhereNotNull('venue_id');
+                $query->where(function ($q) use ($bounds) {
+                    $q->whereBetween('lat', [(float) $bounds['south'], (float) $bounds['north']])
+                        ->whereBetween('lng', [(float) $bounds['west'], (float) $bounds['east']]);
+                })->orWhere(function ($q) use ($bounds) {
+                    $q->where(function ($nullCoords) {
+                        $nullCoords->whereNull('lat')->orWhereNull('lng');
+                    })->whereHas('venue', function ($vq) use ($bounds) {
+                        $vq->whereBetween('lat', [(float) $bounds['south'], (float) $bounds['north']])
+                            ->whereBetween('lng', [(float) $bounds['west'], (float) $bounds['east']]);
+                    });
+                });
             });
         }
         $reportQuery->limit($limit)
-            ->get()
+            ->get(['id', 'venue_id', 'user_id', 'lat', 'lng', 'incident_time', 'severity', 'category'])
             ->each(function (Report $r) use ($bucket, &$points, &$incidents) {
                 $c = $r->coords();
                 if (! $c) {
@@ -106,14 +114,22 @@ class HeatmapController extends Controller
             ->with(['venue:id,name,area', 'user:id,trust_score'])
             ->when(isset($data['north'], $data['south'], $data['east'], $data['west']), function ($query) use ($data) {
                 $query->where(function ($where) use ($data) {
-                    $where->whereBetween('lat', [(float) $data['south'], (float) $data['north']])
-                        ->whereBetween('lng', [(float) $data['west'], (float) $data['east']])
-                        ->orWhereNotNull('venue_id');
+                    $where->where(function ($q) use ($data) {
+                        $q->whereBetween('lat', [(float) $data['south'], (float) $data['north']])
+                            ->whereBetween('lng', [(float) $data['west'], (float) $data['east']]);
+                    })->orWhere(function ($q) use ($data) {
+                        $q->where(function ($nullCoords) {
+                            $nullCoords->whereNull('lat')->orWhereNull('lng');
+                        })->whereHas('venue', function ($vq) use ($data) {
+                            $vq->whereBetween('lat', [(float) $data['south'], (float) $data['north']])
+                                ->whereBetween('lng', [(float) $data['west'], (float) $data['east']]);
+                        });
+                    });
                 });
             })
             ->orderByDesc('incident_time')
             ->limit((int) ($data['limit'] ?? 20))
-            ->get();
+            ->get(['id', 'venue_id', 'user_id', 'category', 'severity', 'body', 'incident_time', 'lat', 'lng']);
 
         $categoryLabels = [
             'theft' => 'Theft / Robbery',

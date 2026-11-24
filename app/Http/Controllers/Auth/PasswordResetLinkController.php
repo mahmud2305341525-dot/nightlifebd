@@ -39,7 +39,7 @@ class PasswordResetLinkController extends Controller
             Log::warning('SMTP Mail sending failed: '.$e->getMessage());
 
             return back()->withInput($request->only('email'))
-                ->withErrors(['email' => __('Could not deliver reset email. Please verify SMTP credentials or check storage/logs/laravel.log.')]);
+                ->withErrors(['email' => __('Could not deliver reset email. Please try again later or contact support.')]);
         }
 
         return $status == Password::RESET_LINK_SENT

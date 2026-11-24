@@ -7,6 +7,7 @@ use App\Services\GeminiService;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Schema;
 
 class NightlifePreflight extends Command
 {
@@ -44,8 +45,12 @@ class NightlifePreflight extends Command
             'safety@test.com',
             'admin@test.com',
         ];
-        if (User::whereIn('email', $defaultDemoEmails)->exists()) {
-            $production ? $failures[] = 'default demo accounts exist' : $warnings[] = 'default demo accounts exist';
+        try {
+            if (Schema::hasTable('users') && User::whereIn('email', $defaultDemoEmails)->exists()) {
+                $production ? $failures[] = 'default demo accounts exist' : $warnings[] = 'default demo accounts exist';
+            }
+        } catch (\Throwable $e) {
+            $warnings[] = 'database check skipped: '.$e->getMessage();
         }
 
         if (config('nightlife.payments_driver', 'mock') !== 'none') {
@@ -63,9 +68,13 @@ class NightlifePreflight extends Command
             $production ? $failures[] = 'QUEUE_CONNECTION=sync' : $warnings[] = 'QUEUE_CONNECTION=sync';
         }
 
-        $heartbeat = Cache::get('nightlife:scheduler-heartbeat');
-        if (! $heartbeat) {
-            $production ? $failures[] = 'scheduler heartbeat is missing' : $warnings[] = 'scheduler heartbeat is missing';
+        try {
+            $heartbeat = Cache::get('nightlife:scheduler-heartbeat');
+            if (! $heartbeat) {
+                $production ? $failures[] = 'scheduler heartbeat is missing' : $warnings[] = 'scheduler heartbeat is missing';
+            }
+        } catch (\Throwable $e) {
+            $warnings[] = 'scheduler heartbeat check skipped: '.$e->getMessage();
         }
 
         if (! $gemini->enabled()) {

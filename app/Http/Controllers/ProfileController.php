@@ -62,6 +62,19 @@ class ProfileController extends Controller
         $user->emergencyContacts()->delete();
         $user->trips()->delete();
 
+        // Release held event ticket capacity for any active future bookings before user deletion
+        foreach ($user->eventBookings()->with(['event', 'ticketTier'])->get() as $booking) {
+            if (! $booking->isCancelled() && $booking->event && $booking->event->starts_at->isFuture()) {
+                if ($booking->ticketTier) {
+                    $tier = $booking->ticketTier;
+                    $decrement = min($tier->booked_count, $booking->quantity);
+                    if ($decrement > 0) {
+                        $tier->decrement('booked_count', $decrement);
+                    }
+                }
+            }
+        }
+
         Auth::logout();
 
         $user->delete();

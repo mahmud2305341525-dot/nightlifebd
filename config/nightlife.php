@@ -28,7 +28,7 @@ return [
     |         (no queue worker needed — best for demos and local dev)
     | true  = Jobs go to the database queue; run `php artisan queue:work`
     */
-    'use_queue' => env('NIGHTLIFE_USE_QUEUE', false),
+    'use_queue' => (bool) env('NIGHTLIFE_USE_QUEUE', false),
 
     /*
     |--------------------------------------------------------------------------

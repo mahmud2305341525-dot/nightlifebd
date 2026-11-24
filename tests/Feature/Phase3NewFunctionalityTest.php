@@ -358,7 +358,7 @@ class Phase3NewFunctionalityTest extends TestCase
             'user_id' => $user->id,
             'name' => 'Emergency Person',
             'phone' => '+8801711111111',
-            'relationship' => 'friend',
+            'relation' => 'friend',
         ]);
 
         Report::create([
@@ -376,6 +376,8 @@ class Phase3NewFunctionalityTest extends TestCase
         $json = $response->json();
         $this->assertEquals($user->id, $json['account']['id']);
         $this->assertCount(1, $json['emergency_contacts']);
+        $this->assertEquals('Emergency Person', $json['emergency_contacts'][0]['name']);
+        $this->assertEquals('friend', $json['emergency_contacts'][0]['relation']);
         $this->assertCount(1, $json['reports']);
     }
 

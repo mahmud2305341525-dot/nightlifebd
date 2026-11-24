@@ -46,7 +46,7 @@ class VenueController extends Controller
         abort_if($venue->is_restricted && ! $request->user()?->is_adult_confirmed, 403,
             'You must confirm you are 18 or older to view this category.');
 
-        $venue->load('scores');
+        $venue->load('scores')->loadAvg('reviews', 'rating')->loadCount('reviews');
         $reports = Report::verified()->where('venue_id', $venue->id)->whereNull('duplicate_of')
             ->withCount('duplicates')->with(['user:id,name', 'photos', 'approvedResponses.user'])->latest('incident_time')->limit(8)->get();
 

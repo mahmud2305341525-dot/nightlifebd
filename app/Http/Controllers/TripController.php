@@ -105,16 +105,29 @@ class TripController extends Controller
         if ($trip->share_pin && ! hash_equals((string) $trip->share_pin, (string) $request->session()->get('trip_pin_'.$trip->id))) {
             return response()->view('trips.pin', ['trip' => $trip], 200);
         }
-        if ($trip->max_views && $trip->view_count >= $trip->max_views) {
-            return response()->view('trips.expired', [], 410);
+        $sessionKey = 'trip_viewed_'.$trip->id;
+        if (! $request->session()->get($sessionKey)) {
+            if ($trip->max_views) {
+                $updated = Trip::where('id', $trip->id)
+                    ->where('view_count', '<', $trip->max_views)
+                    ->increment('view_count');
+                if ($updated === 0) {
+                    return response()->view('trips.expired', [], 410);
+                }
+            } else {
+                $trip->increment('view_count');
+            }
+            $request->session()->put($sessionKey, true);
         }
-        $trip->increment('view_count');
 
         return view('trips.track', ['trip' => $trip->load('user:id,name')]);
     }
 
     public function verifyPin(Request $request, Trip $trip)
     {
+        if (! $trip->isActive()) {
+            return response()->view('trips.expired', [], 410);
+        }
         $data = $request->validate(['pin' => ['required', 'string', 'max:8']]);
         if (! $trip->share_pin || hash_equals((string) $trip->share_pin, (string) $data['pin'])) {
             $request->session()->put('trip_pin_'.$trip->id, (string) $data['pin']);
@@ -135,6 +148,23 @@ class TripController extends Controller
         }
         if ($trip->share_pin && ! hash_equals((string) $trip->share_pin, (string) $request->session()->get('trip_pin_'.$trip->id))) {
             return response()->json(['active' => false, 'message' => __('PIN required.')], 403);
+        }
+        $sessionKey = 'trip_viewed_'.$trip->id;
+        if (! $request->session()->get($sessionKey)) {
+            if ($trip->max_views) {
+                $updated = Trip::where('id', $trip->id)
+                    ->where('view_count', '<', $trip->max_views)
+                    ->increment('view_count');
+                if ($updated === 0) {
+                    return response()->json([
+                        'active' => false,
+                        'message' => __('This tracking link has reached its view limit and expired.'),
+                    ], 410);
+                }
+            } else {
+                $trip->increment('view_count');
+            }
+            $request->session()->put($sessionKey, true);
         }
 
         $secondsSincePing = $trip->last_ping_at ? (int) abs(now()->diffInSeconds($trip->last_ping_at)) : null;
