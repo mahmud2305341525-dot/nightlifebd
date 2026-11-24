@@ -10,6 +10,7 @@ return [
     | Never automatically enabled by local environment or APP_DEBUG alone.
     */
     'demo_enabled' => (bool) env('NIGHTLIFE_DEMO_ENABLED', false),
+    'use_queue' => (bool) env('NIGHTLIFE_USE_QUEUE', false),
     'ai_enabled' => (bool) env('NIGHTLIFE_AI_ENABLED', true),
     'ai_circuit_failures' => (int) env('NIGHTLIFE_AI_CIRCUIT_FAILURES', 3),
     'ai_circuit_minutes' => (int) env('NIGHTLIFE_AI_CIRCUIT_MINUTES', 10),

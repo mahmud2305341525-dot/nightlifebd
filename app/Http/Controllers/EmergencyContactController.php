@@ -92,7 +92,6 @@ class EmergencyContactController extends Controller
         if (! filled($secret) || ! filled($headerSecret) || ! hash_equals((string) $secret, (string) $headerSecret)) {
             abort(403, 'Unauthorized webhook signature.');
         }
-
         $message = $request->input('message');
         $chatId = $message['chat']['id'] ?? null;
         $text = trim((string) ($message['text'] ?? ''));
