@@ -12,7 +12,7 @@ class EventController extends Controller
     public function index(Request $request): View
     {
         $query = Event::query()
-            ->with(['venue', 'ticketTiers'])
+            ->with(['venue.scores', 'ticketTiers'])
             ->published()
             ->upcoming()
             ->orderBy('starts_at', 'asc');

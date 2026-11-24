@@ -33,5 +33,10 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->append(RequestId::class);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
-        //
+        $exceptions->report(function (\Illuminate\Session\TokenMismatchException $e) {
+            \Illuminate\Support\Facades\Log::warning('Security: CSRF token mismatch detected', [
+                'ip' => request()->ip(),
+                'url' => request()->fullUrl(),
+            ]);
+        });
     })->create();

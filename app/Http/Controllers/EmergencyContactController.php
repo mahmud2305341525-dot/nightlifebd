@@ -86,6 +86,13 @@ class EmergencyContactController extends Controller
 
     public function telegramWebhook(Request $request)
     {
+        $secret = config('services.telegram.webhook_secret');
+        $headerSecret = $request->header('X-Telegram-Bot-Api-Secret-Token');
+
+        if (! filled($secret) || ! filled($headerSecret) || ! hash_equals((string) $secret, (string) $headerSecret)) {
+            abort(403, 'Unauthorized webhook signature.');
+        }
+
         $message = $request->input('message');
         $chatId = $message['chat']['id'] ?? null;
         $text = trim((string) ($message['text'] ?? ''));

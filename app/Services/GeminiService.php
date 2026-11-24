@@ -48,6 +48,7 @@ class GeminiService
                     Log::warning('Gemini generateContent failed', [
                         'model' => $model,
                         'status' => $res->status(),
+                        'error' => $res->json('error.message') ?? $res->body(),
                     ]);
                 }
             }
@@ -78,6 +79,14 @@ class GeminiService
                     'generationConfig' => ['responseMimeType' => 'application/json', 'temperature' => 0.1],
                 ]);
 
+            if (! $res->successful()) {
+                Log::warning('Gemini vision failed', [
+                    'model' => config('services.gemini.model'),
+                    'status' => $res->status(),
+                    'error' => $res->json('error.message') ?? $res->body(),
+                ]);
+            }
+
             return $res->successful()
                 ? $this->decode($res->json('candidates.0.content.parts.0.text'))
                 : null;
@@ -101,6 +110,13 @@ class GeminiService
                     'content' => ['parts' => [['text' => $text]]],
                     'outputDimensionality' => 256,
                 ]);
+            if (! $res->successful()) {
+                Log::warning('Gemini embed failed', [
+                    'model' => config('services.gemini.embed_model'),
+                    'status' => $res->status(),
+                    'error' => $res->json('error.message') ?? $res->body(),
+                ]);
+            }
             $values = $res->successful() ? $res->json('embedding.values') : null;
 
             return is_array($values) && count($values) > 0 ? array_map('floatval', $values) : null;

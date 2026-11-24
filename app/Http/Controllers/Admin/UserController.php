@@ -11,7 +11,7 @@ use Spatie\Permission\Models\Role;
 
 class UserController extends Controller
 {
-    public const ROLES = ['user', 'venue_partner', 'safety_admin', 'super_admin'];
+    public const ROLES = ['user', 'venue_partner', 'event_organizer', 'safety_admin', 'super_admin'];
 
     public function index()
     {

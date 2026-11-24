@@ -116,10 +116,10 @@ Route::middleware(['auth', 'not_banned'])->group(function () {
     Route::view('/fake-call', 'fakecall')->name('fakecall');
 
     /* Events & Bookings */
-    Route::post('/events/{event}/book', [EventBookingController::class, 'store'])->whereNumber('event')->name('events.book');
+    Route::post('/events/{event}/book', [EventBookingController::class, 'store'])->whereNumber('event')->middleware('throttle:15,1')->name('events.book');
     Route::get('/events/passes/{reference}', [EventBookingController::class, 'show'])->name('events.bookings.show');
     Route::get('/my-bookings', [EventBookingController::class, 'mine'])->name('events.bookings.mine');
-    Route::post('/events/bookings/{booking}/cancel', [EventBookingController::class, 'cancel'])->name('events.bookings.cancel');
+    Route::post('/events/bookings/{booking}/cancel', [EventBookingController::class, 'cancel'])->middleware('throttle:15,1')->name('events.bookings.cancel');
     Route::get('/notifications/events', [EventNotificationController::class, 'index'])->name('events.notifications');
     Route::get('/api/notifications/unread-count', [EventNotificationController::class, 'unreadCount'])->name('api.notifications.unread');
 });

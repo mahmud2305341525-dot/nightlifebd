@@ -23,7 +23,13 @@ class ExpirePaymentBookings extends Command
                 foreach ($bookings as $booking) {
                     DB::transaction(function () use ($booking) {
                         $booking->update(['status' => 'cancelled', 'payment_status' => 'expired']);
-                        $booking->ticketTier()->decrement('booked_count', $booking->quantity);
+                        $tier = $booking->ticketTier;
+                        if ($tier) {
+                            $decrement = min($tier->booked_count, $booking->quantity);
+                            if ($decrement > 0) {
+                                $tier->decrement('booked_count', $decrement);
+                            }
+                        }
                     });
                 }
                 $count += $bookings->count();

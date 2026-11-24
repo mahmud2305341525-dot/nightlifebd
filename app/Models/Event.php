@@ -105,6 +105,12 @@ class Event extends Model
 
     public function lowestPrice(): float
     {
+        if ($this->relationLoaded('ticketTiers')) {
+            $min = $this->ticketTiers->min('price');
+
+            return $min !== null ? (float) $min : 0.0;
+        }
+
         return (float) ($this->ticketTiers()->min('price') ?? 0.0);
     }
 

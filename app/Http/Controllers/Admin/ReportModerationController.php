@@ -76,7 +76,7 @@ class ReportModerationController extends Controller
         }
 
         $report->update($updates);
-        $report->user->recalcTrust();
+        $report->user?->recalcTrust();
 
         AuditLog::record($request->user()->id, "report.{$status}", [
             'report_id' => $report->id,

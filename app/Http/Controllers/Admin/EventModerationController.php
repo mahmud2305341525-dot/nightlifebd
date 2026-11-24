@@ -130,7 +130,7 @@ class EventModerationController extends Controller
                 'message' => __('Invalid ticket! No booking found with this QR or code.'),
             ], 404);
         }
-        if (in_array($booking->payment_status, ['pending', 'expired', 'refunded', 'cancelled'], true)) {
+        if (in_array($booking->payment_status, ['pending', 'expired', 'refunded', 'refund_pending', 'cancelled'], true)) {
             return response()->json([
                 'success' => false,
                 'message' => __('Payment not confirmed or ticket refunded. Entry denied.'),
@@ -163,7 +163,39 @@ class EventModerationController extends Controller
             ], 409);
         }
 
-        $booking->markCheckedIn(auth()->user());
+        $officer = auth()->user();
+        $updated = EventBooking::where('id', $booking->id)
+            ->where('status', 'confirmed')
+            ->update([
+                'status' => 'checked_in',
+                'checked_in_at' => now(),
+                'checked_in_by' => $officer->id,
+            ]);
+
+        if ($updated === 0) {
+            $freshBooking = $booking->fresh();
+            if ($freshBooking->isCheckedIn()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => __('Already Checked In at :time by :officer', [
+                        'time' => $freshBooking->checked_in_at?->format('h:i A, d M Y'),
+                        'officer' => $freshBooking->checkedInByUser?->name ?? 'Staff',
+                    ]),
+                    'booking' => [
+                        'reference' => $freshBooking->booking_reference,
+                        'status' => 'checked_in',
+                        'checked_in_at' => $freshBooking->checked_in_at?->toIso8601String(),
+                    ],
+                ], 409);
+            }
+
+            return response()->json([
+                'success' => false,
+                'message' => __('Ticket status changed or invalid. Entry denied.'),
+            ], 422);
+        }
+
+        $booking->refresh();
 
         return response()->json([
             'success' => true,

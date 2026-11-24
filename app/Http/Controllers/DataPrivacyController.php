@@ -29,7 +29,7 @@ class DataPrivacyController extends Controller
                 'trust_score' => $user->trust_score,
                 'created_at' => $user->created_at?->toIso8601String(),
             ],
-            'emergency_contacts' => $user->emergencyContacts()->get(['name', 'phone', 'relationship', 'is_priority', 'created_at'])->toArray(),
+            'emergency_contacts' => $user->emergencyContacts()->get(['name', 'phone', 'relation', 'created_at'])->toArray(),
             'reports' => $user->reports()->with('venue:id,name')->get()->map(fn ($r) => [
                 'id' => $r->id,
                 'venue' => $r->venue?->name,
